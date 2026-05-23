@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BIN CARD Dashboard - Google Sheets</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body{font-family:Segoe UI,sans-serif;background:#f4f7fb;margin:0;padding:20px;color:#1e293b}
+.container{max-width:1300px;margin:auto}
+h1{margin:0}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.card{background:#fff;border-radius:14px;padding:18px;box-shadow:0 3px 12px rgba(0,0,0,.08)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:15px;margin-bottom:20px}
+.stat{font-size:28px;font-weight:bold}
+.controls{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px}
+input,select,button{padding:10px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px}
+button{background:#2563eb;color:white;border:none;cursor:pointer}
+button:hover{background:#1d4ed8}
+table{width:100%;border-collapse:collapse;background:white;border-radius:10px;overflow:hidden}
+th,td{padding:10px;border-bottom:1px solid #e2e8f0;text-align:left}
+th{background:#e2e8f0}
+.badge{padding:4px 8px;border-radius:5px;color:white;font-size:12px}
+.in{background:#16a34a}
+.out{background:#dc2626}
+.section{margin-top:20px}
+.scroll{max-height:350px;overflow:auto}
+canvas{max-height:250px}
+#error{color:#2563eb;margin:10px 0;font-weight:bold}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="header">
+<div>
+<h1>📦 BIN CARD Dashboard</h1>
+<div>Monitoring Stok Barang via Google Sheets</div>
+</div>
+</div>
+
+<div class="card controls">
+<input id="sheetInput" placeholder="Paste link / ID Google Sheet">
+<button onclick="loadData()">Muat Data</button>
+<input id="searchInput" placeholder="Cari..." onkeyup="applyFilters()">
+<input type="month" id="monthFilter" onchange="applyFilters()">
+<button onclick="showAllBarang()">Semua Barang</button>
+<button onclick="downloadCSV()">Download CSV</button>
+</div>
+
+<div id="error"></div>
+
+<div class="grid">
+<div class="card"><div>Total Masuk</div><div class="stat" id="masukTotal">0</div></div>
+<div class="card"><div>Total Keluar</div><div class="stat" id="keluarTotal">0</div></div>
+<div class="card"><div>Saldo Akhir</div><div class="stat" id="saldoTotal">0</div></div>
+</div>
+
+<div class="grid">
+<div class="card">
+<h3>Aktivitas Stok</h3>
+<canvas id="pieChart"></canvas>
+</div>
+
+<div class="card">
+<h3>Saldo Akhir per Barang</h3>
+<div class="scroll">
+<table>
+<thead><tr><th>Barang</th><th>Masuk</th><th>Keluar</th><th>Saldo</th></tr></thead>
+<tbody id="saldoBody"></tbody>
+</table>
+</div>
+</div>
+</div>
+
+<div class="section card">
+<h3>Log Transaksi</h3>
+<div class="scroll">
+<table>
+<thead>
+<tr>
+<th>Tanggal</th>
+<th>Barang</th>
+<th>Tipe</th>
+<th>Jumlah</th>
+<th>Penerima/Keterangan</th>
+</tr>
+</thead>
+<tbody id="tbody"></tbody>
+</table>
+</div>
+</div>
+
+</div>
+
+<script>
+let allRows=[];
+let chart=null;
+let filterTimeout=null;
+
+function getId(input){
+ let m=input.match(/\/d\/([a-zA-Z0-9-_]+)/);
+ return m ? m[1] : input.trim();
+}
+
+function loadData(){
+ let input=document.getElementById('sheetInput').value.trim();
+ if(!input){alert('Masukkan link/ID');return;}
+ let id=getId(input);
+ document.getElementById('error').innerText='Sedang memuat data dari Google Sheet...';
+ let old=document.getElementById('jsonp');
+ if(old) old.remove();
+ let s=document.createElement('script');
+ s.id='jsonp';
+ s.src='https://docs.google.com/spreadsheets/d/'+id+'/gviz/tq?gid=0&tqx=responseHandler:handleData';
+ document.body.appendChild(s);
+}
+
+window.handleData = function(res){
+ try{
+  allRows=[];
+  let rows=res.table.rows;
+  
+  if(!rows || rows.length === 0){
+    document.getElementById('error').innerText='Data kosong atau tidak ditemukan.';
+    return;
+  }
+
+  document.getElementById('error').innerText='';
+  let tempRows = [];
+
+  rows.forEach(r=>{
+   let tanggal= r.c[0] ? (r.c[0].f || r.c[0].v || '') : '';
+   let nama= r.c[1] ? (r.c[1].v || '').toString().trim() : '';
+   let jenis= r.c[2] ? (r.c[2].v || '').toString().trim() : '';
+   let jumlah= r.c[3] ? parseFloat(r.c[3].v || 0) : 0;
+   let ket= r.c[4] ? (r.c[4].v || '').toString().trim() : '';
+
+   if(!nama && !tanggal && !jenis) return;
+
+   let year = null;
+   let month = null; 
+   
+   let mSlash = String(tanggal).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+   let mDash = String(tanggal).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+
+   if (mSlash) {
+      month = parseInt(mSlash[2]);
+      year = parseInt(mSlash[3]);
+   } else if (mDash) {
+      year = parseInt(mDash[1]);
+      month = parseInt(mDash[2]);
+   } else {
+      let d = new Date(tanggal);
+      if (!isNaN(d.getTime())) {
+         year = d.getFullYear();
+         month = d.getMonth() + 1;
+      }
+   }
+
+   let searchText=(tanggal+' '+nama+' '+jenis+' '+ket+' '+jumlah).toLowerCase();
+   tempRows.push({tanggal,nama,jenis,jumlah,ket,month,year,searchText});
+  });
+
+  allRows = tempRows;
+  applyFilters();
+
+ }catch(e){
+  console.log(e);
+  document.getElementById('error').innerText='Gagal membaca data dari Google Sheet.';
+ }
+}
+
+function applyFilters(){
+ clearTimeout(filterTimeout);
+ filterTimeout = setTimeout(() => {
+    let search=document.getElementById('searchInput').value.trim().toLowerCase();
+    let monthInput=document.getElementById('monthFilter').value;
+
+    let data=allRows.filter(r=>{
+        let okSearch = !search || (r.searchText || '').includes(search);
+        let okMonth = true;
+        
+        if(monthInput){
+            let parts=monthInput.split('-');
+            let filterYear=parseInt(parts[0]);
+            let filterMonth=parseInt(parts[1]);
+            okMonth=(r.year === filterYear && r.month === filterMonth);
+        }
+
+        return okSearch && okMonth;
+    });
+
+    render(data);
+ }, 150); // Jeda anti-lemot saat mengetik cepat
+}
+
+function render(data){
+ let tbody=document.getElementById('tbody');
+ let saldoBody=document.getElementById('saldoBody');
+
+ let masuk=0, keluar=0;
+ let saldoBarang={};
+ 
+ let tbodyHtml = [];
+ let saldoHtml = [];
+
+ data.forEach(r=>{
+  let jenis=(r.jenis||'').toLowerCase().trim();
+  let barang=(r.nama||'').toString().trim();
+
+  if(jenis==='masuk') masuk+=Number(r.jumlah)||0;
+  if(jenis==='keluar') keluar+=Number(r.jumlah)||0;
+
+  if(barang){
+    if(!saldoBarang[barang]){
+      saldoBarang[barang]={masuk:0,keluar:0};
+    }
+    if(jenis==='masuk'){
+      saldoBarang[barang].masuk += Number(r.jumlah)||0;
+    }
+    if(jenis==='keluar'){
+      saldoBarang[barang].keluar += Number(r.jumlah)||0;
+    }
+  }
+
+  tbodyHtml.push(`
+  <tr>
+  <td>${r.tanggal}</td>
+  <td>${barang}</td>
+  <td><span class="badge ${jenis==='masuk'?'in':'out'}">${r.jenis}</span></td>
+  <td>${r.jumlah}</td>
+  <td>${r.ket}</td>
+  </tr>`);
+ });
+
+ Object.keys(saldoBarang).sort().forEach(b=>{
+    let s=saldoBarang[b];
+    let saldo=(s.masuk-s.keluar);
+
+    saldoHtml.push(`
+    <tr>
+      <td>${b}</td>
+      <td>${s.masuk}</td>
+      <td>${s.keluar}</td>
+      <td><b>${saldo}</b></td>
+    </tr>`);
+ });
+
+ // Render instan sekaligus
+ tbody.innerHTML = tbodyHtml.join('');
+ saldoBody.innerHTML = saldoHtml.join('');
+
+ document.getElementById('masukTotal').innerText=masuk;
+ document.getElementById('keluarTotal').innerText=keluar;
+ document.getElementById('saldoTotal').innerText=masuk-keluar;
+
+ drawChart(masuk,keluar);
+}
+
+function drawChart(masuk,keluar){
+ let ctx=document.getElementById('pieChart');
+ if(chart) chart.destroy();
+ chart=new Chart(ctx,{
+  type:'pie',
+  data:{
+   labels:['Masuk','Keluar'],
+   datasets:[{data:[masuk,keluar],backgroundColor:['#16a34a','#dc2626']}]
+  },
+  options:{
+   responsive: true,
+   animation: false // Menonaktifkan animasi grafik agar proses filter responsif
+  }
+ });
+}
+
+function showAllBarang(){
+ document.getElementById('searchInput').value = '';
+ document.getElementById('monthFilter').value = '';
+ render(allRows); // Menampilkan kembali seluruh barang
+}
+
+function downloadCSV(){
+ let rows=[...document.querySelectorAll('#tbody tr')];
+ let csv='Tanggal,Barang,Tipe,Jumlah,Penerima/Keterangan\n';
+ rows.forEach(r=>{
+  let c=r.querySelectorAll('td');
+  if(c.length){
+   csv+=`${c[0].innerText},${c[1].innerText},${c[2].innerText},${c[3].innerText},${c[4].innerText}\n`;
+  }
+ });
+ let blob=new Blob([csv],{type:'text/csv'});
+ let a=document.createElement('a');
+ a.href=URL.createObjectURL(blob);
+ a.download='bincard.csv';
+ a.click();
+}
+</script>
+</body>
+</html>
