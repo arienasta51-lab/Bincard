@@ -82,7 +82,7 @@ canvas{max-height:250px}
 <th>Barang</th>
 <th>Tipe</th>
 <th>Jumlah</th>
-<th>Penerima/Keterangan</th>
+<th>Keterangan</th>
 </tr>
 </thead>
 <tbody id="tbody"></tbody>
@@ -284,7 +284,7 @@ function showAllBarang(){
 
 function downloadCSV(){
  let rows=[...document.querySelectorAll('#tbody tr')];
- let csv='Tanggal,Barang,Tipe,Jumlah,Penerima/Keterangan\n';
+ let csv='Tanggal,Barang,Tipe,Jumlah,Keterangan\n';
  rows.forEach(r=>{
   let c=r.querySelectorAll('td');
   if(c.length){
