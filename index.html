@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BIN CARD Dashboard - Google Sheets</title>
+<title>BIN CARD Dashboard Live</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
 body{font-family:Segoe UI,sans-serif;background:#f4f7fb;margin:0;padding:20px;color:#1e293b}
@@ -34,21 +34,20 @@ canvas{max-height:250px}
 
 <div class="header">
 <div>
-<h1>📦 BIN CARD Dashboard</h1>
-<div>Monitoring Stok Barang via Google Sheets</div>
+<h1>📦 BIN CARD Dashboard Live</h1>
+<div>Data Terintegrasi Langsung Cloud Google Sheets</div>
 </div>
 </div>
 
 <div class="card controls">
-<input id="sheetInput" placeholder="Paste link / ID Google Sheet">
-<button onclick="loadData()">Muat Data</button>
-<input id="searchInput" placeholder="Cari..." onkeyup="applyFilters()">
+<input id="searchInput" placeholder="Cari nama barang..." onkeyup="applyFilters()">
 <input type="month" id="monthFilter" onchange="applyFilters()">
 <button onclick="showAllBarang()">Semua Barang</button>
 <button onclick="downloadCSV()">Download CSV</button>
+<button onclick="loadData()" style="background:#1e293b;">Refresh Data</button>
 </div>
 
-<div id="error"></div>
+<div id="error">Sedang memuat data...</div>
 
 <div class="grid">
 <div class="card"><div>Total Masuk</div><div class="stat" id="masukTotal">0</div></div>
@@ -94,25 +93,29 @@ canvas{max-height:250px}
 </div>
 
 <script>
+// ID Google Sheet Anda sudah dimasukkan langsung di sini
+const SPREADSHEET_ID = "1RzitZC9jifvgtblHDbWxvxK5mge8U0JLpH2HxmAlPWM"; 
+
 let allRows=[];
 let chart=null;
 let filterTimeout=null;
 
-function getId(input){
- let m=input.match(/\/d\/([a-zA-Z0-9-_]+)/);
- return m ? m[1] : input.trim();
-}
+// Otomatis memuat data saat halaman web dibuka pertama kali oleh siapa saja
+window.onload = function() {
+  loadData();
+};
 
 function loadData(){
- let input=document.getElementById('sheetInput').value.trim();
- if(!input){alert('Masukkan link/ID');return;}
- let id=getId(input);
- document.getElementById('error').innerText='Sedang memuat data dari Google Sheet...';
+ if(!SPREADSHEET_ID || SPREADSHEET_ID.includes("GANTI_DENGAN")){
+    document.getElementById('error').innerText='Error: ID Google Sheet belum dimasukkan ke dalam kode script.';
+    return;
+ }
+ document.getElementById('error').innerText='Sedang sinkronisasi data cloud...';
  let old=document.getElementById('jsonp');
  if(old) old.remove();
  let s=document.createElement('script');
  s.id='jsonp';
- s.src='https://docs.google.com/spreadsheets/d/'+id+'/gviz/tq?gid=0&tqx=responseHandler:handleData';
+ s.src='https://docs.google.com/spreadsheets/d/'+SPREADSHEET_ID+'/gviz/tq?gid=0&tqx=responseHandler:handleData';
  document.body.appendChild(s);
 }
 
@@ -167,7 +170,7 @@ window.handleData = function(res){
 
  }catch(e){
   console.log(e);
-  document.getElementById('error').innerText='Gagal membaca data dari Google Sheet.';
+  document.getElementById('error').innerText='Gagal membaca data dari Google Sheet. Cek kembali setelan Share link Anda.';
  }
 }
 
@@ -192,7 +195,7 @@ function applyFilters(){
     });
 
     render(data);
- }, 150); // Jeda anti-lemot saat mengetik cepat
+ }, 150);
 }
 
 function render(data){
@@ -247,7 +250,6 @@ function render(data){
     </tr>`);
  });
 
- // Render instan sekaligus
  tbody.innerHTML = tbodyHtml.join('');
  saldoBody.innerHTML = saldoHtml.join('');
 
@@ -269,7 +271,7 @@ function drawChart(masuk,keluar){
   },
   options:{
    responsive: true,
-   animation: false // Menonaktifkan animasi grafik agar proses filter responsif
+   animation: false
   }
  });
 }
@@ -277,7 +279,7 @@ function drawChart(masuk,keluar){
 function showAllBarang(){
  document.getElementById('searchInput').value = '';
  document.getElementById('monthFilter').value = '';
- render(allRows); // Menampilkan kembali seluruh barang
+ render(allRows);
 }
 
 function downloadCSV(){
