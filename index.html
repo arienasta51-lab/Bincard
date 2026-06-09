@@ -11,7 +11,7 @@ body{font-family:Segoe UI,sans-serif;background:#f4f7fb;margin:0;padding:20px;co
 h1{margin:0}
 .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
 .card{background:#fff;border-radius:14px;padding:18px;box-shadow:0 3px 12px rgba(0,0,0,.08)}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:15px;margin-bottom:20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px;margin-bottom:20px}
 .stat{font-size:28px;font-weight:bold}
 .controls{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px}
 input,select,button{padding:10px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px}
@@ -27,6 +27,8 @@ th{background:#e2e8f0}
 .scroll{max-height:350px;overflow:auto}
 canvas{max-height:250px}
 #error{color:#2563eb;margin:10px 0;font-weight:bold}
+/* Penambahan style agar kartu statistik rata-rata sedikit berbeda */
+.card.info { border-left: 5px solid #2563eb; }
 </style>
 </head>
 <body>
@@ -53,6 +55,11 @@ canvas{max-height:250px}
 <div class="card"><div>Total Masuk</div><div class="stat" id="masukTotal">0</div></div>
 <div class="card"><div>Total Keluar</div><div class="stat" id="keluarTotal">0</div></div>
 <div class="card"><div>Saldo Akhir</div><div class="stat" id="saldoTotal">0</div></div>
+
+<!-- Kartu Baru untuk Rata-rata Keluar -->
+<div class="card info"><div>Rata-rata Keluar/Hari</div><div class="stat" id="avgDay">0</div></div>
+<div class="card info"><div>Rata-rata Keluar/Minggu</div><div class="stat" id="avgWeek">0</div></div>
+<div class="card info"><div>Rata-rata Keluar/Bulan</div><div class="stat" id="avgMonth">0</div></div>
 </div>
 
 <div class="grid">
@@ -101,7 +108,6 @@ let allRows=[];
 let chart=null;
 let filterTimeout=null;
 
-// Otomatis memuat data saat halaman web dibuka pertama kali
 window.onload = function() {
   loadData();
 };
@@ -120,6 +126,15 @@ function loadData(){
  document.body.appendChild(s);
 }
 
+// Helper untuk mendapatkan Nomor Minggu dalam setahun
+Date.prototype.getWeekNumber = function() {
+    var d = new Date(Date.UTC(this.getFullYear(), this.getMonth(), this.getDate()));
+    var dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    var yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+    return Math.ceil((((d - yearStart) / 86400000) + 1)/7);
+};
+
 window.handleData = function(res){
  try{
   allRows=[];
@@ -134,41 +149,68 @@ window.handleData = function(res){
   let tempRows = [];
 
   rows.forEach(r=>{
-   let tanggal= r.c[0] ? (r.c[0].f || r.c[0].v || '') : '';
+   let tanggalRaw= r.c[0] ? (r.c[0].f || r.c[0].v || '') : '';
    let nama= r.c[1] ? (r.c[1].v || '').toString().trim() : '';
    let jenis= r.c[2] ? (r.c[2].v || '').toString().trim() : '';
    let jumlah= r.c[3] ? parseFloat(r.c[3].v || 0) : 0;
    let ket= r.c[4] ? (r.c[4].v || '').toString().trim() : '';
-   // Perbaikan: Mengambil data Lokasi dari kolom ke-6 (Index 5)
    let lokasi= r.c[5] ? (r.c[5].v || '').toString().trim() : '';
 
-   if(!nama && !tanggal && !jenis) return;
+   if(!nama && !tanggalRaw && !jenis) return;
 
    let year = null;
    let month = null; 
-   
-   let mSlash = String(tanggal).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-   let mDash = String(tanggal).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+   let day = null;
+   let week = null;
+   let dateObj = null;
+
+   // Parsing Tanggal
+   let mSlash = String(tanggalRaw).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+   let mDash = String(tanggalRaw).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
 
    if (mSlash) {
+      day = parseInt(mSlash[1]);
       month = parseInt(mSlash[2]);
       year = parseInt(mSlash[3]);
+      dateObj = new Date(year, month - 1, day);
    } else if (mDash) {
       year = parseInt(mDash[1]);
       month = parseInt(mDash[2]);
+      day = parseInt(mDash[3]);
+      dateObj = new Date(year, month - 1, day);
    } else {
-      let d = new Date(tanggal);
+      // Fallback untuk format lain atau Date object
+      let d = new Date(tanggalRaw);
       if (!isNaN(d.getTime())) {
          year = d.getFullYear();
          month = d.getMonth() + 1;
+         day = d.getDate();
+         dateObj = d;
       }
    }
 
-   // Menambahkan 'lokasi' ke searchText agar bisa dicari
-   let searchText=(tanggal+' '+nama+' '+jenis+' '+ket+' '+jumlah+' '+lokasi).toLowerCase();
+   // Hitung Week jika tanggal valid
+   if(dateObj && !isNaN(dateObj.getTime())){
+       week = dateObj.getWeekNumber();
+   }
+
+   let searchText=(tanggalRaw+' '+nama+' '+jenis+' '+ket+' '+jumlah+' '+lokasi).toLowerCase();
    
-   // Menambahkan properti 'lokasi' ke objek baris
-   tempRows.push({tanggal,nama,jenis,jumlah,ket,lokasi,month,year,searchText});
+   // Simpan data termasuk informasi waktu untuk kalkulasi rata-rata
+   tempRows.push({
+       tanggal: tanggalRaw, 
+       nama, 
+       jenis, 
+       jumlah, 
+       ket, 
+       lokasi, 
+       month, 
+       year, 
+       day, 
+       week,
+       dateObj,
+       searchText
+   });
   });
 
   allRows = tempRows;
@@ -211,6 +253,12 @@ function render(data){
  let masuk=0, keluar=0;
  let saldoBarang={};
  
+ // Variabel untuk kalkulasi rata-rata
+ let keluarTotalJumlah = 0;
+ let uniqueDays = new Set();
+ let uniqueWeeks = new Set();
+ let uniqueMonths = new Set();
+
  let tbodyHtml = [];
  let saldoHtml = [];
 
@@ -219,7 +267,16 @@ function render(data){
   let barang=(r.nama||'').toString().trim();
 
   if(jenis==='masuk') masuk+=Number(r.jumlah)||0;
-  if(jenis==='keluar') keluar+=Number(r.jumlah)||0;
+  if(jenis==='keluar') {
+      let jumlahKeluar = Number(r.jumlah)||0;
+      keluar+=jumlahKeluar;
+      
+      // Proses data untuk rata-rata
+      keluarTotalJumlah += jumlahKeluar;
+      if(r.year && r.month && r.day) uniqueDays.add(`${r.year}-${r.month}-${r.day}`);
+      if(r.year && r.week) uniqueWeeks.add(`${r.year}-${r.week}`);
+      if(r.year && r.month) uniqueMonths.add(`${r.year}-${r.month}`);
+  }
 
   if(barang){
     if(!saldoBarang[barang]){
@@ -233,7 +290,6 @@ function render(data){
     }
   }
 
-  // Perbaikan: Menambahkan <td> untuk Lokasi
   tbodyHtml.push(`
   <tr>
   <td>${r.tanggal}</td>
@@ -265,6 +321,20 @@ function render(data){
  document.getElementById('keluarTotal').innerText=keluar;
  document.getElementById('saldoTotal').innerText=masuk-keluar;
 
+ // --- Kalkulasi Rata-rata Keluar ---
+ let avgDayVal = 0;
+ let avgWeekVal = 0;
+ let avgMonthVal = 0;
+
+ if(uniqueDays.size > 0) avgDayVal = keluarTotalJumlah / uniqueDays.size;
+ if(uniqueWeeks.size > 0) avgWeekVal = keluarTotalJumlah / uniqueWeeks.size;
+ if(uniqueMonths.size > 0) avgMonthVal = keluarTotalJumlah / uniqueMonths.size;
+
+ // Tampilkan ke Dashboard (pembulatan 1 desimal)
+ document.getElementById('avgDay').innerText = avgDayVal.toFixed(1);
+ document.getElementById('avgWeek').innerText = avgWeekVal.toFixed(1);
+ document.getElementById('avgMonth').innerText = avgMonthVal.toFixed(1);
+
  drawChart(masuk,keluar);
 }
 
@@ -292,13 +362,10 @@ function showAllBarang(){
 
 function downloadCSV(){
  let rows=[...document.querySelectorAll('#tbody tr')];
- // Perbaikan: Menambahkan header Lokasi di CSV
  let csv='Tanggal,Barang,Tipe,Jumlah,Keterangan,Lokasi\n';
  rows.forEach(r=>{
   let c=r.querySelectorAll('td');
   if(c.length){
-   // Perbaikan: Menambahkan data Lokasi (index 5) di CSV
-   // c[0] s.d c[4] sudah ada, c[5] adalah lokasi
    let lokasiText = c[5] ? c[5].innerText : '';
    csv+=`${c[0].innerText},${c[1].innerText},${c[2].innerText},${c[3].innerText},${c[4].innerText},${lokasiText}\n`;
   }
