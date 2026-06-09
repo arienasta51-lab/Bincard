@@ -83,6 +83,7 @@ canvas{max-height:250px}
 <th>Tipe</th>
 <th>Jumlah</th>
 <th>Keterangan</th>
+<th>Lokasi</th>
 </tr>
 </thead>
 <tbody id="tbody"></tbody>
@@ -93,14 +94,14 @@ canvas{max-height:250px}
 </div>
 
 <script>
-// ID Google Sheet Anda sudah dimasukkan langsung di sini
+// ID Google Sheet Anda
 const SPREADSHEET_ID = "1RzitZC9jifvgtblHDbWxvxK5mge8U0JLpH2HxmAlPWM"; 
 
 let allRows=[];
 let chart=null;
 let filterTimeout=null;
 
-// Otomatis memuat data saat halaman web dibuka pertama kali oleh siapa saja
+// Otomatis memuat data saat halaman web dibuka pertama kali
 window.onload = function() {
   loadData();
 };
@@ -138,6 +139,8 @@ window.handleData = function(res){
    let jenis= r.c[2] ? (r.c[2].v || '').toString().trim() : '';
    let jumlah= r.c[3] ? parseFloat(r.c[3].v || 0) : 0;
    let ket= r.c[4] ? (r.c[4].v || '').toString().trim() : '';
+   // Perbaikan: Mengambil data Lokasi dari kolom ke-6 (Index 5)
+   let lokasi= r.c[5] ? (r.c[5].v || '').toString().trim() : '';
 
    if(!nama && !tanggal && !jenis) return;
 
@@ -161,8 +164,11 @@ window.handleData = function(res){
       }
    }
 
-   let searchText=(tanggal+' '+nama+' '+jenis+' '+ket+' '+jumlah).toLowerCase();
-   tempRows.push({tanggal,nama,jenis,jumlah,ket,month,year,searchText});
+   // Menambahkan 'lokasi' ke searchText agar bisa dicari
+   let searchText=(tanggal+' '+nama+' '+jenis+' '+ket+' '+jumlah+' '+lokasi).toLowerCase();
+   
+   // Menambahkan properti 'lokasi' ke objek baris
+   tempRows.push({tanggal,nama,jenis,jumlah,ket,lokasi,month,year,searchText});
   });
 
   allRows = tempRows;
@@ -227,6 +233,7 @@ function render(data){
     }
   }
 
+  // Perbaikan: Menambahkan <td> untuk Lokasi
   tbodyHtml.push(`
   <tr>
   <td>${r.tanggal}</td>
@@ -234,6 +241,7 @@ function render(data){
   <td><span class="badge ${jenis==='masuk'?'in':'out'}">${r.jenis}</span></td>
   <td>${r.jumlah}</td>
   <td>${r.ket}</td>
+  <td>${r.lokasi}</td>
   </tr>`);
  });
 
@@ -284,11 +292,15 @@ function showAllBarang(){
 
 function downloadCSV(){
  let rows=[...document.querySelectorAll('#tbody tr')];
- let csv='Tanggal,Barang,Tipe,Jumlah,Keterangan\n';
+ // Perbaikan: Menambahkan header Lokasi di CSV
+ let csv='Tanggal,Barang,Tipe,Jumlah,Keterangan,Lokasi\n';
  rows.forEach(r=>{
   let c=r.querySelectorAll('td');
   if(c.length){
-   csv+=`${c[0].innerText},${c[1].innerText},${c[2].innerText},${c[3].innerText},${c[4].innerText}\n`;
+   // Perbaikan: Menambahkan data Lokasi (index 5) di CSV
+   // c[0] s.d c[4] sudah ada, c[5] adalah lokasi
+   let lokasiText = c[5] ? c[5].innerText : '';
+   csv+=`${c[0].innerText},${c[1].innerText},${c[2].innerText},${c[3].innerText},${c[4].innerText},${lokasiText}\n`;
   }
  });
  let blob=new Blob([csv],{type:'text/csv'});
