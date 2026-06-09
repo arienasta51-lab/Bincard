@@ -27,7 +27,6 @@ th{background:#e2e8f0}
 .scroll{max-height:350px;overflow:auto}
 canvas{max-height:250px}
 #error{color:#2563eb;margin:10px 0;font-weight:bold}
-/* Penambahan style agar kartu statistik rata-rata sedikit berbeda */
 .card.info { border-left: 5px solid #2563eb; }
 </style>
 </head>
@@ -44,6 +43,10 @@ canvas{max-height:250px}
 <div class="card controls">
 <input id="searchInput" placeholder="Cari nama barang..." onkeyup="applyFilters()">
 <input type="month" id="monthFilter" onchange="applyFilters()">
+<!-- Tambahan: Filter Lokasi -->
+<select id="locationFilter" onchange="applyFilters()">
+    <option value="">Semua Lokasi</option>
+</select>
 <button onclick="showAllBarang()">Semua Barang</button>
 <button onclick="downloadCSV()">Download CSV</button>
 <button onclick="loadData()" style="background:#1e293b;">Refresh Data</button>
@@ -56,7 +59,6 @@ canvas{max-height:250px}
 <div class="card"><div>Total Keluar</div><div class="stat" id="keluarTotal">0</div></div>
 <div class="card"><div>Saldo Akhir</div><div class="stat" id="saldoTotal">0</div></div>
 
-<!-- Kartu Baru untuk Rata-rata Keluar -->
 <div class="card info"><div>Rata-rata Keluar/Hari</div><div class="stat" id="avgDay">0</div></div>
 <div class="card info"><div>Rata-rata Keluar/Minggu</div><div class="stat" id="avgWeek">0</div></div>
 <div class="card info"><div>Rata-rata Keluar/Bulan</div><div class="stat" id="avgMonth">0</div></div>
@@ -126,7 +128,6 @@ function loadData(){
  document.body.appendChild(s);
 }
 
-// Helper untuk mendapatkan Nomor Minggu dalam setahun
 Date.prototype.getWeekNumber = function() {
     var d = new Date(Date.UTC(this.getFullYear(), this.getMonth(), this.getDate()));
     var dayNum = d.getUTCDay() || 7;
@@ -147,6 +148,9 @@ window.handleData = function(res){
 
   document.getElementById('error').innerText='';
   let tempRows = [];
+  
+  // Set untuk menyimpan daftar lokasi unik
+  let uniqueLocations = new Set();
 
   rows.forEach(r=>{
    let tanggalRaw= r.c[0] ? (r.c[0].f || r.c[0].v || '') : '';
@@ -158,13 +162,15 @@ window.handleData = function(res){
 
    if(!nama && !tanggalRaw && !jenis) return;
 
+   // Tambahkan lokasi ke daftar set jika ada
+   if(lokasi) uniqueLocations.add(lokasi);
+
    let year = null;
    let month = null; 
    let day = null;
    let week = null;
    let dateObj = null;
 
-   // Parsing Tanggal
    let mSlash = String(tanggalRaw).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
    let mDash = String(tanggalRaw).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
 
@@ -179,7 +185,6 @@ window.handleData = function(res){
       day = parseInt(mDash[3]);
       dateObj = new Date(year, month - 1, day);
    } else {
-      // Fallback untuk format lain atau Date object
       let d = new Date(tanggalRaw);
       if (!isNaN(d.getTime())) {
          year = d.getFullYear();
@@ -189,14 +194,12 @@ window.handleData = function(res){
       }
    }
 
-   // Hitung Week jika tanggal valid
    if(dateObj && !isNaN(dateObj.getTime())){
        week = dateObj.getWeekNumber();
    }
 
    let searchText=(tanggalRaw+' '+nama+' '+jenis+' '+ket+' '+jumlah+' '+lokasi).toLowerCase();
    
-   // Simpan data termasuk informasi waktu untuk kalkulasi rata-rata
    tempRows.push({
        tanggal: tanggalRaw, 
        nama, 
@@ -214,6 +217,21 @@ window.handleData = function(res){
   });
 
   allRows = tempRows;
+  
+  // Populate Location Filter Dropdown
+  let locSelect = document.getElementById('locationFilter');
+  // Hapus op lama kecuali opsi default
+  while (locSelect.options.length > 1) {
+    locSelect.remove(1);
+  }
+  // Tambahkan opsi lokasi baru
+  [...uniqueLocations].sort().forEach(loc => {
+     let option = document.createElement('option');
+     option.value = loc;
+     option.text = loc;
+     locSelect.appendChild(option);
+  });
+
   applyFilters();
 
  }catch(e){
@@ -227,19 +245,26 @@ function applyFilters(){
  filterTimeout = setTimeout(() => {
     let search=document.getElementById('searchInput').value.trim().toLowerCase();
     let monthInput=document.getElementById('monthFilter').value;
+    let locInput=document.getElementById('locationFilter').value; // Ambil nilai filter lokasi
 
     let data=allRows.filter(r=>{
         let okSearch = !search || (r.searchText || '').includes(search);
         let okMonth = true;
-        
+        let okLoc = true; // Default true
+
         if(monthInput){
             let parts=monthInput.split('-');
             let filterYear=parseInt(parts[0]);
             let filterMonth=parseInt(parts[1]);
             okMonth=(r.year === filterYear && r.month === filterMonth);
         }
+        
+        // Logika Filter Lokasi
+        if(locInput){
+            okLoc = (r.lokasi === locInput);
+        }
 
-        return okSearch && okMonth;
+        return okSearch && okMonth && okLoc;
     });
 
     render(data);
@@ -253,7 +278,6 @@ function render(data){
  let masuk=0, keluar=0;
  let saldoBarang={};
  
- // Variabel untuk kalkulasi rata-rata
  let keluarTotalJumlah = 0;
  let uniqueDays = new Set();
  let uniqueWeeks = new Set();
@@ -271,7 +295,6 @@ function render(data){
       let jumlahKeluar = Number(r.jumlah)||0;
       keluar+=jumlahKeluar;
       
-      // Proses data untuk rata-rata
       keluarTotalJumlah += jumlahKeluar;
       if(r.year && r.month && r.day) uniqueDays.add(`${r.year}-${r.month}-${r.day}`);
       if(r.year && r.week) uniqueWeeks.add(`${r.year}-${r.week}`);
@@ -321,7 +344,6 @@ function render(data){
  document.getElementById('keluarTotal').innerText=keluar;
  document.getElementById('saldoTotal').innerText=masuk-keluar;
 
- // --- Kalkulasi Rata-rata Keluar ---
  let avgDayVal = 0;
  let avgWeekVal = 0;
  let avgMonthVal = 0;
@@ -330,7 +352,6 @@ function render(data){
  if(uniqueWeeks.size > 0) avgWeekVal = keluarTotalJumlah / uniqueWeeks.size;
  if(uniqueMonths.size > 0) avgMonthVal = keluarTotalJumlah / uniqueMonths.size;
 
- // Tampilkan ke Dashboard (pembulatan 1 desimal)
  document.getElementById('avgDay').innerText = avgDayVal.toFixed(1);
  document.getElementById('avgWeek').innerText = avgWeekVal.toFixed(1);
  document.getElementById('avgMonth').innerText = avgMonthVal.toFixed(1);
@@ -357,6 +378,7 @@ function drawChart(masuk,keluar){
 function showAllBarang(){
  document.getElementById('searchInput').value = '';
  document.getElementById('monthFilter').value = '';
+ document.getElementById('locationFilter').value = ''; // Reset filter lokasi juga
  render(allRows);
 }
 
