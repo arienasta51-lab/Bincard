@@ -43,7 +43,7 @@ canvas{max-height:250px}
 <div class="card controls">
 <input id="searchInput" placeholder="Cari nama barang..." onkeyup="applyFilters()">
 <input type="month" id="monthFilter" onchange="applyFilters()">
-<!-- Tambahan: Filter Lokasi -->
+<!-- Filter Lokasi -->
 <select id="locationFilter" onchange="applyFilters()">
     <option value="">Semua Lokasi</option>
 </select>
@@ -54,14 +54,11 @@ canvas{max-height:250px}
 
 <div id="error">Sedang memuat data...</div>
 
+<!-- Kartu Total Masuk, Keluar, Saldo Akhir telah dihapus sesuai permintaan -->
 <div class="grid">
-<div class="card"><div>Total Masuk</div><div class="stat" id="masukTotal">0</div></div>
-<div class="card"><div>Total Keluar</div><div class="stat" id="keluarTotal">0</div></div>
-<div class="card"><div>Saldo Akhir</div><div class="stat" id="saldoTotal">0</div></div>
-
-<div class="card info"><div>Rata-rata Keluar/Hari</div><div class="stat" id="avgDay">0</div></div>
-<div class="card info"><div>Rata-rata Keluar/Minggu</div><div class="stat" id="avgWeek">0</div></div>
-<div class="card info"><div>Rata-rata Keluar/Bulan</div><div class="stat" id="avgMonth">0</div></div>
+    <div class="card info"><div>Rata-rata Keluar/Hari</div><div class="stat" id="avgDay">0</div></div>
+    <div class="card info"><div>Rata-rata Keluar/Minggu</div><div class="stat" id="avgWeek">0</div></div>
+    <div class="card info"><div>Rata-rata Keluar/Bulan</div><div class="stat" id="avgMonth">0</div></div>
 </div>
 
 <div class="grid">
@@ -245,12 +242,12 @@ function applyFilters(){
  filterTimeout = setTimeout(() => {
     let search=document.getElementById('searchInput').value.trim().toLowerCase();
     let monthInput=document.getElementById('monthFilter').value;
-    let locInput=document.getElementById('locationFilter').value; // Ambil nilai filter lokasi
+    let locInput=document.getElementById('locationFilter').value; 
 
     let data=allRows.filter(r=>{
         let okSearch = !search || (r.searchText || '').includes(search);
         let okMonth = true;
-        let okLoc = true; // Default true
+        let okLoc = true; 
 
         if(monthInput){
             let parts=monthInput.split('-');
@@ -259,7 +256,6 @@ function applyFilters(){
             okMonth=(r.year === filterYear && r.month === filterMonth);
         }
         
-        // Logika Filter Lokasi
         if(locInput){
             okLoc = (r.lokasi === locInput);
         }
@@ -275,6 +271,7 @@ function render(data){
  let tbody=document.getElementById('tbody');
  let saldoBody=document.getElementById('saldoBody');
 
+ // Variabel masuk dan keluar tetap dihitung untuk keperluan Grafik Pie Chart
  let masuk=0, keluar=0;
  let saldoBarang={};
  
@@ -340,9 +337,7 @@ function render(data){
  tbody.innerHTML = tbodyHtml.join('');
  saldoBody.innerHTML = saldoHtml.join('');
 
- document.getElementById('masukTotal').innerText=masuk;
- document.getElementById('keluarTotal').innerText=keluar;
- document.getElementById('saldoTotal').innerText=masuk-keluar;
+ // Baris pembaruan kartu total dihapus karena elemen sudah dihapus
 
  let avgDayVal = 0;
  let avgWeekVal = 0;
@@ -378,7 +373,7 @@ function drawChart(masuk,keluar){
 function showAllBarang(){
  document.getElementById('searchInput').value = '';
  document.getElementById('monthFilter').value = '';
- document.getElementById('locationFilter').value = ''; // Reset filter lokasi juga
+ document.getElementById('locationFilter').value = ''; 
  render(allRows);
 }
 
