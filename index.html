@@ -25,7 +25,7 @@ th{background:#e2e8f0}
 .out{background:#dc2626}
 .section{margin-top:20px}
 .scroll{max-height:350px;overflow:auto}
-canvas{max-height:250px}
+canvas{max-height:300px; width:100% !important;}
 #error{color:#2563eb;margin:10px 0;font-weight:bold}
 .card.info { border-left: 5px solid #2563eb; }
 </style>
@@ -63,8 +63,9 @@ canvas{max-height:250px}
 
 <div class="grid">
 <div class="card">
-<h3>Aktivitas Stok</h3>
-<canvas id="pieChart"></canvas>
+<h3>Tren Aktivitas Stok (Masuk vs Keluar)</h3>
+<!-- Canvas untuk Line Chart -->
+<canvas id="lineChart"></canvas>
 </div>
 
 <div class="card">
@@ -104,7 +105,7 @@ canvas{max-height:250px}
 const SPREADSHEET_ID = "1RzitZC9jifvgtblHDbWxvxK5mge8U0JLpH2HxmAlPWM"; 
 
 let allRows=[];
-let chart=null;
+let chart=null; // Variabel chart diubah menjadi line chart
 let filterTimeout=null;
 
 window.onload = function() {
@@ -271,7 +272,7 @@ function render(data){
  let tbody=document.getElementById('tbody');
  let saldoBody=document.getElementById('saldoBody');
 
- // Variabel masuk dan keluar tetap dihitung untuk keperluan Grafik Pie Chart
+ // Variabel untuk statistik
  let masuk=0, keluar=0;
  let saldoBarang={};
  
@@ -280,6 +281,9 @@ function render(data){
  let uniqueWeeks = new Set();
  let uniqueMonths = new Set();
 
+ // Variabel untuk Line Chart (Grouping Data per Tanggal)
+ let chartDataMap = {}; 
+
  let tbodyHtml = [];
  let saldoHtml = [];
 
@@ -287,6 +291,7 @@ function render(data){
   let jenis=(r.jenis||'').toLowerCase().trim();
   let barang=(r.nama||'').toString().trim();
 
+  // Akumulasi total untuk statistik kartu
   if(jenis==='masuk') masuk+=Number(r.jumlah)||0;
   if(jenis==='keluar') {
       let jumlahKeluar = Number(r.jumlah)||0;
@@ -298,6 +303,7 @@ function render(data){
       if(r.year && r.month) uniqueMonths.add(`${r.year}-${r.month}`);
   }
 
+  // Proses untuk Saldo Barang
   if(barang){
     if(!saldoBarang[barang]){
       saldoBarang[barang]={masuk:0,keluar:0};
@@ -308,6 +314,17 @@ function render(data){
     if(jenis==='keluar'){
       saldoBarang[barang].keluar += Number(r.jumlah)||0;
     }
+  }
+
+  // Proses untuk Line Chart (Grouping Harian)
+  if(r.dateObj){
+      // Format Key: YYYY-MM-DD untuk sorting
+      let dateKey = r.dateObj.toISOString().split('T')[0]; 
+      if(!chartDataMap[dateKey]){
+          chartDataMap[dateKey] = { masuk: 0, keluar: 0 };
+      }
+      if(jenis==='masuk') chartDataMap[dateKey].masuk += Number(r.jumlah)||0;
+      if(jenis==='keluar') chartDataMap[dateKey].keluar += Number(r.jumlah)||0;
   }
 
   tbodyHtml.push(`
@@ -337,8 +354,7 @@ function render(data){
  tbody.innerHTML = tbodyHtml.join('');
  saldoBody.innerHTML = saldoHtml.join('');
 
- // Baris pembaruan kartu total dihapus karena elemen sudah dihapus
-
+ // Update Kartu Statistik
  let avgDayVal = 0;
  let avgWeekVal = 0;
  let avgMonthVal = 0;
@@ -351,23 +367,93 @@ function render(data){
  document.getElementById('avgWeek').innerText = avgWeekVal.toFixed(1);
  document.getElementById('avgMonth').innerText = avgMonthVal.toFixed(1);
 
- drawChart(masuk,keluar);
+ // Panggil fungsi menggambar Line Chart
+ drawLineChart(chartDataMap);
 }
 
-function drawChart(masuk,keluar){
- let ctx=document.getElementById('pieChart');
- if(chart) chart.destroy();
- chart=new Chart(ctx,{
-  type:'pie',
-  data:{
-   labels:['Masuk','Keluar'],
-   datasets:[{data:[masuk,keluar],backgroundColor:['#16a34a','#dc2626']}]
-  },
-  options:{
-   responsive: true,
-   animation: false
-  }
- });
+function drawLineChart(dataMap){
+    // 1. Urutkan tanggal
+    let sortedDates = Object.keys(dataMap).sort((a, b) => new Date(a) - new Date(b));
+    
+    // 2. Logika Filter 3 Bulan Terakhir
+    let monthInput = document.getElementById('monthFilter').value;
+    let labels = [];
+    let dataMasuk = [];
+    let dataKeluar = [];
+
+    // Jika tidak ada filter bulan spesifik, potong data untuk 3 bulan terakhir
+    let cutoffDate = null;
+    if (!monthInput && sortedDates.length > 0) {
+        let lastDate = new Date(sortedDates[sortedDates.length - 1]);
+        cutoffDate = new Date(lastDate);
+        cutoffDate.setMonth(cutoffDate.getMonth() - 3); // Mundur 3 bulan
+    }
+
+    sortedDates.forEach(dateStr => {
+        let d = new Date(dateStr);
+        
+        // Jika ada cutoff date (mode 3 bulan terakhir), lewati tanggal yang lebih lama
+        if (cutoffDate && d < cutoffDate) {
+            return;
+        }
+
+        // Format Label (DD/MM)
+        let parts = dateStr.split('-'); // YYYY-MM-DD
+        let label = `${parts[2]}/${parts[1]}`; // DD/MM
+        
+        labels.push(label);
+        dataMasuk.push(dataMap[dateStr].masuk);
+        dataKeluar.push(dataMap[dateStr].keluar);
+    });
+
+    // 3. Render Chart
+    let ctx = document.getElementById('lineChart').getContext('2d');
+    if(chart) chart.destroy();
+    
+    chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Masuk',
+                    data: dataMasuk,
+                    borderColor: '#16a34a', // Hijau
+                    backgroundColor: 'rgba(22, 163, 74, 0.1)',
+                    fill: true,
+                    tension: 0.4 // Membuat garis melengkung sedikit
+                },
+                {
+                    label: 'Keluar',
+                    data: dataKeluar,
+                    borderColor: '#dc2626', // Merah
+                    backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: { display: true, text: 'Jumlah' }
+                },
+                x: {
+                    title: { display: true, text: 'Tanggal' }
+                }
+            },
+            plugins: {
+                legend: { position: 'top' },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
+                }
+            }
+        }
+    });
 }
 
 function showAllBarang(){
