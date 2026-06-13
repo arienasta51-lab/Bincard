@@ -46,6 +46,9 @@ canvas{max-height:250px}
 <select id="locationFilter" onchange="applyFilters()">
     <option value="">Semua Lokasi</option>
 </select>
+<select id="categoryFilter" onchange="applyFilters()">
+    <option value="">Semua Kategori</option>
+</select>
 <button onclick="showAllBarang()">Semua Barang</button>
 <button onclick="downloadCSV()">Download CSV</button>
 <button onclick="loadData()" style="background:#1e293b;">Refresh Data</button>
@@ -61,7 +64,7 @@ canvas{max-height:250px}
 
 <div class="grid">
 <div class="card">
-<h3>Data Keluar Barang (3 Bulan Terakhir)</h3>
+<h3>Tren Keluar Barang (3 Bulan Terakhir)</h3>
 <canvas id="lineChart"></canvas>
 </div>
 
@@ -84,7 +87,7 @@ canvas{max-height:250px}
 <tr>
 <th>Tanggal</th>
 <th>Barang</th>
-<th>Tipe</th>
+<th>Kategori</th> <th>Tipe</th>
 <th>Jumlah</th>
 <th>Keterangan</th>
 <th>Lokasi</th>
@@ -106,7 +109,7 @@ let chart=null;
 let filterTimeout=null;
 
 window.onload = function() {
-  loadData();
+ loadData();
 };
 
 function loadData(){
@@ -145,18 +148,25 @@ window.handleData = function(res){
   let tempRows = [];
   
   let uniqueLocations = new Set();
+  let uniqueCategories = new Set(); // Set untuk menampung kategori unik
 
   rows.forEach(r=>{
    let tanggalRaw= r.c[0] ? (r.c[0].f || r.c[0].v || '') : '';
    let nama= r.c[1] ? (r.c[1].v || '').toString().trim() : '';
-   let jenis= r.c[2] ? (r.c[2].v || '').toString().trim() : '';
-   let jumlah= r.c[3] ? parseFloat(r.c[3].v || 0) : 0;
-   let ket= r.c[4] ? (r.c[4].v || '').toString().trim() : '';
-   let lokasi= r.c[5] ? (r.c[5].v || '').toString().trim() : '';
+   
+   // Mengasumsikan struktur kolom Google Sheet Anda: 
+   // Kolom 0: Tanggal, Kolom 1: Nama Barang, Kolom 2: Kategori, Kolom 3: Tipe (Masuk/Keluar), Kolom 4: Jumlah, Kolom 5: Keterangan, Kolom 6: Lokasi
+   // Mengikuti format baru, indeks digeser:
+   let kategori= r.c[2] ? (r.c[2].v || '').toString().trim() : '';
+   let jenis= r.c[3] ? (r.c[3].v || '').toString().trim() : '';
+   let jumlah= r.c[4] ? parseFloat(r.c[4].v || 0) : 0;
+   let ket= r.c[5] ? (r.c[5].v || '').toString().trim() : '';
+   let lokasi= r.c[6] ? (r.c[6].v || '').toString().trim() : '';
 
    if(!nama && !tanggalRaw && !jenis) return;
 
    if(lokasi) uniqueLocations.add(lokasi);
+   if(kategori) uniqueCategories.add(kategori); // Simpan kategori jika ada
 
    let year = null;
    let month = null; 
@@ -191,11 +201,12 @@ window.handleData = function(res){
        week = dateObj.getWeekNumber();
    }
 
-   let searchText=(tanggalRaw+' '+nama+' '+jenis+' '+ket+' '+jumlah+' '+lokasi).toLowerCase();
+   let searchText=(tanggalRaw+' '+nama+' '+kategori+' '+jenis+' '+ket+' '+jumlah+' '+lokasi).toLowerCase();
    
    tempRows.push({
        tanggal: tanggalRaw, 
        nama, 
+       kategori, // Ditambahkan ke data objek
        jenis, 
        jumlah, 
        ket, 
@@ -211,6 +222,7 @@ window.handleData = function(res){
 
   allRows = tempRows;
   
+  // Isi dropdown Lokasi
   let locSelect = document.getElementById('locationFilter');
   while (locSelect.options.length > 1) {
     locSelect.remove(1);
@@ -220,6 +232,18 @@ window.handleData = function(res){
      option.value = loc;
      option.text = loc;
      locSelect.appendChild(option);
+  });
+
+  // Isi dropdown Kategori
+  let catSelect = document.getElementById('categoryFilter');
+  while (catSelect.options.length > 1) {
+    catSelect.remove(1);
+  }
+  [...uniqueCategories].sort().forEach(cat => {
+     let option = document.createElement('option');
+     option.value = cat;
+     option.text = cat;
+     catSelect.appendChild(option);
   });
 
   applyFilters();
@@ -236,11 +260,13 @@ function applyFilters(){
     let search=document.getElementById('searchInput').value.trim().toLowerCase();
     let monthInput=document.getElementById('monthFilter').value;
     let locInput=document.getElementById('locationFilter').value; 
+    let catInput=document.getElementById('categoryFilter').value; // Ambil nilai filter kategori
 
     let data=allRows.filter(r=>{
         let okSearch = !search || (r.searchText || '').includes(search);
         let okMonth = true;
         let okLoc = true; 
+        let okCat = true;
 
         if(monthInput){
             let parts=monthInput.split('-');
@@ -253,7 +279,11 @@ function applyFilters(){
             okLoc = (r.lokasi === locInput);
         }
 
-        return okSearch && okMonth && okLoc;
+        if(catInput){
+            okCat = (r.kategori === catInput); // Jalankan filter kategori
+        }
+
+        return okSearch && okMonth && okLoc && okCat;
     });
 
     render(data);
@@ -275,7 +305,6 @@ function render(data){
  let tbodyHtml = [];
  let saldoHtml = [];
 
- // Object untuk menampung total pengeluaran per bulan-tahun
  let monthlyOutData = {};
 
  data.forEach(r=>{
@@ -292,7 +321,6 @@ function render(data){
       if(r.year && r.week) uniqueWeeks.add(`${r.year}-${r.week}`);
       if(r.year && r.month) uniqueMonths.add(`${r.year}-${r.month}`);
 
-      // Kumpulkan data keluar untuk grafik line chart
       if(r.year && r.month) {
           let key = `${r.year}-${String(r.month).padStart(2, '0')}`;
           monthlyOutData[key] = (monthlyOutData[key] || 0) + jumlahKeluar;
@@ -311,10 +339,12 @@ function render(data){
     }
   }
 
+  // Menambahkan kolom kategori pada baris tabel log transaksi
   tbodyHtml.push(`
   <tr>
   <td>${r.tanggal}</td>
   <td>${barang}</td>
+  <td>${r.kategori || '-'}</td>
   <td><span class="badge ${jenis==='masuk'?'in':'out'}">${r.jenis}</span></td>
   <td>${r.jumlah}</td>
   <td>${r.ket}</td>
@@ -350,7 +380,6 @@ function render(data){
  document.getElementById('avgWeek').innerText = avgWeekVal.toFixed(1);
  document.getElementById('avgMonth').innerText = avgMonthVal.toFixed(1);
 
- // Jalankan fungsi gambar grafik LINE baru
  drawLineChart(monthlyOutData);
 }
 
@@ -358,11 +387,9 @@ function drawLineChart(monthlyOutData){
  let ctx=document.getElementById('lineChart');
  if(chart) chart.destroy();
 
- // Ambil seluruh key bulan yang terisi, urutkan, dan ambil maksimal 3 bulan terakhir saja
  let sortedMonths = Object.keys(monthlyOutData).sort();
  let lastThreeMonths = sortedMonths.slice(-3);
 
- // Nama-nama bulan Indonesia untuk label grafik yang lebih cantik
  const monthNames = {
      "01": "Januari", "02": "Februari", "03": "Maret", "04": "April", 
      "05": "Mei", "06": "Juni", "07": "Juli", "08": "Agustus", 
@@ -373,12 +400,11 @@ function drawLineChart(monthlyOutData){
  let chartData = [];
 
  lastThreeMonths.forEach(mKey => {
-     let parts = mKey.split('-'); // ["YYYY", "MM"]
+     let parts = mKey.split('-'); 
      labels.push(`${monthNames[parts[1]]} ${parts[0]}`);
      chartData.push(monthlyOutData[mKey]);
  });
 
- // Jika data kosong (misal tidak ada transaksi keluar pada filter terpilih)
  if(labels.length === 0) {
      labels = ["Tidak Ada Data Keluar"];
      chartData = [0];
@@ -419,17 +445,23 @@ function showAllBarang(){
  document.getElementById('searchInput').value = '';
  document.getElementById('monthFilter').value = '';
  document.getElementById('locationFilter').value = ''; 
+ document.getElementById('categoryFilter').value = ''; // Reset filter kategori
  render(allRows);
 }
 
 function downloadCSV(){
  let rows=[...document.querySelectorAll('#tbody tr')];
- let csv='Tanggal,Barang,Tipe,Jumlah,Keterangan,Lokasi\n';
+ // Header CSV disesuaikan dengan penambahan kolom kategori
+ csv='Tanggal,Barang,Kategori,Tipe,Jumlah,Keterangan,Lokasi\n';
  rows.forEach(r=>{
   let c=r.querySelectorAll('td');
   if(c.length){
-   let lokasiText = c[5] ? c[5].innerText : '';
-   csv+=`${c[0].innerText},${c[1].innerText},${c[2].innerText},${c[3].innerText},${c[4].innerText},${lokasiText}\n`;
+   let katText = c[2] ? c[2].innerText : '';
+   let tipeText = c[3] ? c[3].innerText : '';
+   let jmlText = c[4] ? c[4].innerText : '';
+   let ketText = c[5] ? c[5].innerText : '';
+   let lokasiText = c[6] ? c[6].innerText : '';
+   csv+=`${c[0].innerText},${c[1].innerText},${katText},${tipeText},${jmlText},${ketText},${lokasiText}\n`;
   }
  });
  let blob=new Blob([csv],{type:'text/csv'});
