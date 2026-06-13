@@ -384,7 +384,7 @@ function drawLineChart(monthlyOutData){
  if(chart) chart.destroy();
 
  let sortedMonths = Object.keys(monthlyOutData).sort();
- let lastThreeMonths = sortedMonths.slice(-3);
+ let lastThreeMonths = sortedMonths.slice(-4);
 
  const monthNames = {
      "01": "Januari", "02": "Februari", "03": "Maret", "04": "April", 
