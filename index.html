@@ -54,7 +54,6 @@ canvas{max-height:300px; width:100% !important;}
 
 <div id="error">Sedang memuat data...</div>
 
-<!-- Kartu Total Masuk, Keluar, Saldo Akhir telah dihapus sesuai permintaan -->
 <div class="grid">
     <div class="card info"><div>Rata-rata Keluar/Hari</div><div class="stat" id="avgDay">0</div></div>
     <div class="card info"><div>Rata-rata Keluar/Minggu</div><div class="stat" id="avgWeek">0</div></div>
@@ -63,7 +62,7 @@ canvas{max-height:300px; width:100% !important;}
 
 <div class="grid">
 <div class="card">
-<h3>Tren Aktivitas Stok (Masuk vs Keluar)</h3>
+<h3>Tren Barang Keluar (3 Bulan Terakhir)</h3>
 <!-- Canvas untuk Line Chart -->
 <canvas id="lineChart"></canvas>
 </div>
@@ -105,7 +104,7 @@ canvas{max-height:300px; width:100% !important;}
 const SPREADSHEET_ID = "1RzitZC9jifvgtblHDbWxvxK5mge8U0JLpH2HxmAlPWM"; 
 
 let allRows=[];
-let chart=null; // Variabel chart diubah menjadi line chart
+let chart=null; 
 let filterTimeout=null;
 
 window.onload = function() {
@@ -281,7 +280,7 @@ function render(data){
  let uniqueWeeks = new Set();
  let uniqueMonths = new Set();
 
- // Variabel untuk Line Chart (Grouping Data per Tanggal)
+ // Variabel untuk Line Chart (Hanya Keluar)
  let chartDataMap = {}; 
 
  let tbodyHtml = [];
@@ -316,15 +315,14 @@ function render(data){
     }
   }
 
-  // Proses untuk Line Chart (Grouping Harian)
-  if(r.dateObj){
+  // Proses untuk Line Chart (Hanya menghitung barang Keluar)
+  if(jenis === 'keluar' && r.dateObj){
       // Format Key: YYYY-MM-DD untuk sorting
       let dateKey = r.dateObj.toISOString().split('T')[0]; 
       if(!chartDataMap[dateKey]){
-          chartDataMap[dateKey] = { masuk: 0, keluar: 0 };
+          chartDataMap[dateKey] = 0;
       }
-      if(jenis==='masuk') chartDataMap[dateKey].masuk += Number(r.jumlah)||0;
-      if(jenis==='keluar') chartDataMap[dateKey].keluar += Number(r.jumlah)||0;
+      chartDataMap[dateKey] += jumlahKeluar;
   }
 
   tbodyHtml.push(`
@@ -375,24 +373,23 @@ function drawLineChart(dataMap){
     // 1. Urutkan tanggal
     let sortedDates = Object.keys(dataMap).sort((a, b) => new Date(a) - new Date(b));
     
-    // 2. Logika Filter 3 Bulan Terakhir
+    // 2. Logika Filter 3 Bulan Terakhir (90 hari)
     let monthInput = document.getElementById('monthFilter').value;
     let labels = [];
-    let dataMasuk = [];
     let dataKeluar = [];
 
-    // Jika tidak ada filter bulan spesifik, potong data untuk 3 bulan terakhir
+    // Jika tidak ada filter bulan spesifik, potong data untuk 3 bulan terakhir (default)
     let cutoffDate = null;
     if (!monthInput && sortedDates.length > 0) {
         let lastDate = new Date(sortedDates[sortedDates.length - 1]);
         cutoffDate = new Date(lastDate);
-        cutoffDate.setMonth(cutoffDate.getMonth() - 3); // Mundur 3 bulan
+        cutoffDate.setDate(cutoffDate.getDate() - 90); // Mundur 90 hari (sekitar 3 bulan)
     }
 
     sortedDates.forEach(dateStr => {
         let d = new Date(dateStr);
         
-        // Jika ada cutoff date (mode 3 bulan terakhir), lewati tanggal yang lebih lama
+        // Jika ada cutoff date (mode default 3 bulan), lewati tanggal yang lebih lama
         if (cutoffDate && d < cutoffDate) {
             return;
         }
@@ -402,8 +399,7 @@ function drawLineChart(dataMap){
         let label = `${parts[2]}/${parts[1]}`; // DD/MM
         
         labels.push(label);
-        dataMasuk.push(dataMap[dateStr].masuk);
-        dataKeluar.push(dataMap[dateStr].keluar);
+        dataKeluar.push(dataMap[dateStr]);
     });
 
     // 3. Render Chart
@@ -416,20 +412,12 @@ function drawLineChart(dataMap){
             labels: labels,
             datasets: [
                 {
-                    label: 'Masuk',
-                    data: dataMasuk,
-                    borderColor: '#16a34a', // Hijau
-                    backgroundColor: 'rgba(22, 163, 74, 0.1)',
-                    fill: true,
-                    tension: 0.4 // Membuat garis melengkung sedikit
-                },
-                {
-                    label: 'Keluar',
+                    label: 'Barang Keluar',
                     data: dataKeluar,
                     borderColor: '#dc2626', // Merah
                     backgroundColor: 'rgba(220, 38, 38, 0.1)',
                     fill: true,
-                    tension: 0.4
+                    tension: 0.4 
                 }
             ]
         },
@@ -439,7 +427,7 @@ function drawLineChart(dataMap){
             scales: {
                 y: {
                     beginAtZero: true,
-                    title: { display: true, text: 'Jumlah' }
+                    title: { display: true, text: 'Jumlah Keluar' }
                 },
                 x: {
                     title: { display: true, text: 'Tanggal' }
