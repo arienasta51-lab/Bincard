@@ -43,7 +43,6 @@ canvas{max-height:250px}
 <div class="card controls">
 <input id="searchInput" placeholder="Cari nama barang..." onkeyup="applyFilters()">
 <input type="month" id="monthFilter" onchange="applyFilters()">
-<!-- Filter Lokasi -->
 <select id="locationFilter" onchange="applyFilters()">
     <option value="">Semua Lokasi</option>
 </select>
@@ -54,7 +53,6 @@ canvas{max-height:250px}
 
 <div id="error">Sedang memuat data...</div>
 
-<!-- Kartu Total Masuk, Keluar, Saldo Akhir telah dihapus sesuai permintaan -->
 <div class="grid">
     <div class="card info"><div>Rata-rata Keluar/Hari</div><div class="stat" id="avgDay">0</div></div>
     <div class="card info"><div>Rata-rata Keluar/Minggu</div><div class="stat" id="avgWeek">0</div></div>
@@ -63,8 +61,8 @@ canvas{max-height:250px}
 
 <div class="grid">
 <div class="card">
-<h3>Aktivitas Stok</h3>
-<canvas id="pieChart"></canvas>
+<h3>Tren Keluar Barang (3 Bulan Terakhir)</h3>
+<canvas id="lineChart"></canvas>
 </div>
 
 <div class="card">
@@ -146,7 +144,6 @@ window.handleData = function(res){
   document.getElementById('error').innerText='';
   let tempRows = [];
   
-  // Set untuk menyimpan daftar lokasi unik
   let uniqueLocations = new Set();
 
   rows.forEach(r=>{
@@ -159,7 +156,6 @@ window.handleData = function(res){
 
    if(!nama && !tanggalRaw && !jenis) return;
 
-   // Tambahkan lokasi ke daftar set jika ada
    if(lokasi) uniqueLocations.add(lokasi);
 
    let year = null;
@@ -215,13 +211,10 @@ window.handleData = function(res){
 
   allRows = tempRows;
   
-  // Populate Location Filter Dropdown
   let locSelect = document.getElementById('locationFilter');
-  // Hapus op lama kecuali opsi default
   while (locSelect.options.length > 1) {
     locSelect.remove(1);
   }
-  // Tambahkan opsi lokasi baru
   [...uniqueLocations].sort().forEach(loc => {
      let option = document.createElement('option');
      option.value = loc;
@@ -271,7 +264,6 @@ function render(data){
  let tbody=document.getElementById('tbody');
  let saldoBody=document.getElementById('saldoBody');
 
- // Variabel masuk dan keluar tetap dihitung untuk keperluan Grafik Pie Chart
  let masuk=0, keluar=0;
  let saldoBarang={};
  
@@ -282,6 +274,9 @@ function render(data){
 
  let tbodyHtml = [];
  let saldoHtml = [];
+
+ // Object untuk menampung total pengeluaran per bulan-tahun
+ let monthlyOutData = {};
 
  data.forEach(r=>{
   let jenis=(r.jenis||'').toLowerCase().trim();
@@ -296,6 +291,12 @@ function render(data){
       if(r.year && r.month && r.day) uniqueDays.add(`${r.year}-${r.month}-${r.day}`);
       if(r.year && r.week) uniqueWeeks.add(`${r.year}-${r.week}`);
       if(r.year && r.month) uniqueMonths.add(`${r.year}-${r.month}`);
+
+      // Kumpulkan data keluar untuk grafik line chart
+      if(r.year && r.month) {
+          let key = `${r.year}-${String(r.month).padStart(2, '0')}`;
+          monthlyOutData[key] = (monthlyOutData[key] || 0) + jumlahKeluar;
+      }
   }
 
   if(barang){
@@ -337,8 +338,6 @@ function render(data){
  tbody.innerHTML = tbodyHtml.join('');
  saldoBody.innerHTML = saldoHtml.join('');
 
- // Baris pembaruan kartu total dihapus karena elemen sudah dihapus
-
  let avgDayVal = 0;
  let avgWeekVal = 0;
  let avgMonthVal = 0;
@@ -351,21 +350,67 @@ function render(data){
  document.getElementById('avgWeek').innerText = avgWeekVal.toFixed(1);
  document.getElementById('avgMonth').innerText = avgMonthVal.toFixed(1);
 
- drawChart(masuk,keluar);
+ // Jalankan fungsi gambar grafik LINE baru
+ drawLineChart(monthlyOutData);
 }
 
-function drawChart(masuk,keluar){
- let ctx=document.getElementById('pieChart');
+function drawLineChart(monthlyOutData){
+ let ctx=document.getElementById('lineChart');
  if(chart) chart.destroy();
+
+ // Ambil seluruh key bulan yang terisi, urutkan, dan ambil maksimal 3 bulan terakhir saja
+ let sortedMonths = Object.keys(monthlyOutData).sort();
+ let lastThreeMonths = sortedMonths.slice(-3);
+
+ // Nama-nama bulan Indonesia untuk label grafik yang lebih cantik
+ const monthNames = {
+     "01": "Januari", "02": "Februari", "03": "Maret", "04": "April", 
+     "05": "Mei", "06": "Juni", "07": "Juli", "08": "Agustus", 
+     "09": "September", "10": "Oktober", "11": "November", "12": "Desember"
+ };
+
+ let labels = [];
+ let chartData = [];
+
+ lastThreeMonths.forEach(mKey => {
+     let parts = mKey.split('-'); // ["YYYY", "MM"]
+     labels.push(`${monthNames[parts[1]]} ${parts[0]}`);
+     chartData.push(monthlyOutData[mKey]);
+ });
+
+ // Jika data kosong (misal tidak ada transaksi keluar pada filter terpilih)
+ if(labels.length === 0) {
+     labels = ["Tidak Ada Data Keluar"];
+     chartData = [0];
+ }
+
  chart=new Chart(ctx,{
-  type:'pie',
+  type:'line',
   data:{
-   labels:['Masuk','Keluar'],
-   datasets:[{data:[masuk,keluar],backgroundColor:['#16a34a','#dc2626']}]
+   labels: labels,
+   datasets:[{
+       label: 'Jumlah Barang Keluar',
+       data: chartData,
+       borderColor: '#dc2626',
+       backgroundColor: 'rgba(220, 38, 38, 0.1)',
+       borderWidth: 3,
+       tension: 0.3,
+       fill: true,
+       pointRadius: 5,
+       pointBackgroundColor: '#dc2626'
+   }]
   },
   options:{
    responsive: true,
-   animation: false
+   animation: false,
+   scales: {
+       y: {
+           beginAtZero: true,
+           ticks: {
+               stepSize: 1
+           }
+       }
+   }
   }
  });
 }
