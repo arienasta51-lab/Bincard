@@ -10,7 +10,7 @@ body{font-family:Segoe UI,sans-serif;background:#f4f7fb;margin:0;padding:20px;co
 .container{max-width:1300px;margin:auto}
 h1{margin:0}
 .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
-.card{background:#fff;border-radius:14px;padding:18px;box-shadow:0 3px 12px rgba(0,0,0,.08)}
+.card{background:#fff;border-radius:14px;padding:18px;box-shadow:0 3px 12px rgba(0,0,0,.08);margin-bottom:20px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px;margin-bottom:20px}
 .stat{font-size:28px;font-weight:bold}
 .controls{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px}
@@ -28,6 +28,10 @@ th{background:#e2e8f0}
 canvas{max-height:300px; width:100% !important;}
 #error{color:#2563eb;margin:10px 0;font-weight:bold}
 .card.info { border-left: 5px solid #2563eb; }
+
+/* Style untuk Debug Box */
+#debugBox { background: #fff3cd; border: 1px solid #ffeeba; color: #856404; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 12px; margin-top: 20px; }
+#debugBox h4 { margin-top: 0; color: #856404; }
 </style>
 </head>
 <body>
@@ -43,7 +47,6 @@ canvas{max-height:300px; width:100% !important;}
 <div class="card controls">
 <input id="searchInput" placeholder="Cari nama barang..." onkeyup="applyFilters()">
 <input type="month" id="monthFilter" onchange="applyFilters()">
-<!-- Filter Lokasi -->
 <select id="locationFilter" onchange="applyFilters()">
     <option value="">Semua Lokasi</option>
 </select>
@@ -63,7 +66,6 @@ canvas{max-height:300px; width:100% !important;}
 <div class="grid">
 <div class="card">
 <h3>Tren Barang Keluar (3 Bulan Terakhir)</h3>
-<!-- Canvas untuk Line Chart -->
 <canvas id="lineChart"></canvas>
 </div>
 
@@ -97,11 +99,31 @@ canvas{max-height:300px; width:100% !important;}
 </div>
 </div>
 
+<!-- DEBUG BOX UNTUK MELIHAT DATA MENTAH -->
+<div class="card" id="debugBox" style="display:none;">
+    <h4>⚠️ Mode Debug Data</h4>
+    <p>Data diterima dari Google Sheet, tapi gagal diproses. Cek apakah nama kolom dan urutan sudah sesuai:</p>
+    <ol>
+        <li>Kolom A: Tanggal</li>
+        <li>Kolom B: Nama Barang</li>
+        <li>Kolom C: Jenis (Harus teks "Masuk" atau "Keluar")</li>
+        <li>Kolom D: Jumlah (Angka)</li>
+        <li>Kolom E: Keterangan</li>
+        <li>Kolom F: Lokasi</li>
+    </ol>
+    <div style="background:#fff; padding:10px; border:1px solid #ccc; max-height:200px; overflow:auto;">
+        <pre id="debugContent">Memuat data mentah...</pre>
+    </div>
+</div>
+
 </div>
 
 <script>
-// ID Google Sheet Anda
+// ==========================================
+// PENTING: GANTI ID DI BAWAH INI DENGAN ID SHEET ANDA
+// ==========================================
 const SPREADSHEET_ID = "1RzitZC9jifvgtblHDbWxvxK5mge8U0JLpH2HxmAlPWM"; 
+// ==========================================
 
 let allRows=[];
 let chart=null; 
@@ -134,20 +156,52 @@ Date.prototype.getWeekNumber = function() {
 };
 
 window.handleData = function(res){
+ // TAMPILKAN DEBUG BOX JIKA DATA GAGAL
+ let debugBox = document.getElementById('debugBox');
+ let debugContent = document.getElementById('debugContent');
+
  try{
   allRows=[];
   let rows=res.table.rows;
   
+  // Tampilkan data mentah pertama di debug box untuk cek
+  if(rows && rows.length > 0){
+      let firstRowDebug = "Data Baris Pertama Diterima:\n\n";
+      let cols = res.table.cols; 
+      // Coba tampilkan header jika ada
+      if(cols) {
+          firstRowDebug += "Kolom Terdeteksi: " + cols.length + "\n";
+      }
+      
+      let r = rows[0].c;
+      firstRowDebug += "Index 0 (Tanggal?): " + (r[0] ? r[0].v : 'KOSONG') + "\n";
+      firstRowDebug += "Index 1 (Nama?): " + (r[1] ? r[1].v : 'KOSONG') + "\n";
+      firstRowDebug += "Index 2 (Jenis?): " + (r[2] ? r[2].v : 'KOSONG') + "\n";
+      firstRowDebug += "Index 3 (Jumlah?): " + (r[3] ? r[3].v : 'KOSONG') + "\n";
+      firstRowDebug += "Index 4 (Ket?): " + (r[4] ? r[4].v : 'KOSONG') + "\n";
+      firstRowDebug += "Index 5 (Lokasi?): " + (r[5] ? r[5].v : 'KOSONG');
+      
+      debugContent.innerText = firstRowDebug;
+  } else {
+      debugContent.innerText = "Tidak ada baris data (rows) yang diterima dari Google Sheet.\nPastikan Sheet tidak kosong dan sudah di-Publish to Web.";
+      debugBox.style.display = 'block';
+      document.getElementById('error').innerText='Data Sheet kosong.';
+      return;
+  }
+
   if(!rows || rows.length === 0){
     document.getElementById('error').innerText='Data kosong atau tidak ditemukan.';
+    debugBox.style.display = 'block';
     return;
   }
 
   document.getElementById('error').innerText='';
   let tempRows = [];
-  
-  // Set untuk menyimpan daftar lokasi unik
   let uniqueLocations = new Set();
+  
+  // Counter debug
+  let countValid = 0;
+  let countInvalidType = 0;
 
   rows.forEach(r=>{
    let tanggalRaw= r.c[0] ? (r.c[0].f || r.c[0].v || '') : '';
@@ -157,10 +211,16 @@ window.handleData = function(res){
    let ket= r.c[4] ? (r.c[4].v || '').toString().trim() : '';
    let lokasi= r.c[5] ? (r.c[5].v || '').toString().trim() : '';
 
+   // Filter baris kosong total
    if(!nama && !tanggalRaw && !jenis) return;
 
-   // Tambahkan lokasi ke daftar set jika ada
    if(lokasi) uniqueLocations.add(lokasi);
+
+   // Normalisasi Jenis (Harus Masuk atau Keluar)
+   let jenisLower = jenis.toLowerCase();
+   if(jenisLower !== 'masuk' && jenisLower !== 'keluar') {
+       countInvalidType++; // Hitung data yang tipenya aneh
+   }
 
    let year = null;
    let month = null; 
@@ -168,6 +228,7 @@ window.handleData = function(res){
    let week = null;
    let dateObj = null;
 
+   // Logika Tanggal (Sama seperti sebelumnya)
    let mSlash = String(tanggalRaw).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
    let mDash = String(tanggalRaw).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
 
@@ -200,7 +261,7 @@ window.handleData = function(res){
    tempRows.push({
        tanggal: tanggalRaw, 
        nama, 
-       jenis, 
+       jenis: jenisLower, // Simpan dalam huruf kecil
        jumlah, 
        ket, 
        lokasi, 
@@ -211,17 +272,26 @@ window.handleData = function(res){
        dateObj,
        searchText
    });
+   countValid++;
   });
+
+  // Jika banyak data invalid, tampilkan debug
+  if(countValid === 0 || countInvalidType > 0) {
+      debugBox.style.display = 'block';
+      if(countInvalidType > 0) {
+          debugContent.innerText += "\n\nPERINGATAN: Ditemukan " + countInvalidType + " baris dengan 'Jenis' yang bukan 'Masuk' atau 'Keluar'.\nPastikan penulisan di Sheet benar.";
+      }
+  } else {
+      debugBox.style.display = 'none'; // Sembunyikan jika sukses
+  }
 
   allRows = tempRows;
   
-  // Populate Location Filter Dropdown
+  // Populate Location Filter
   let locSelect = document.getElementById('locationFilter');
-  // Hapus op lama kecuali opsi default
   while (locSelect.options.length > 1) {
     locSelect.remove(1);
   }
-  // Tambahkan opsi lokasi baru
   [...uniqueLocations].sort().forEach(loc => {
      let option = document.createElement('option');
      option.value = loc;
@@ -233,7 +303,9 @@ window.handleData = function(res){
 
  }catch(e){
   console.log(e);
-  document.getElementById('error').innerText='Gagal membaca data dari Google Sheet. Cek kembali setelan Share link Anda.';
+  document.getElementById('error').innerText='Gagal membaca data. Cek struktur Sheet.';
+  debugBox.style.display = 'block';
+  debugContent.innerText = "Error Kritis: " + e.message + "\n\n" + (res ? JSON.stringify(res.table, null, 2) : "No response");
  }
 }
 
@@ -271,7 +343,6 @@ function render(data){
  let tbody=document.getElementById('tbody');
  let saldoBody=document.getElementById('saldoBody');
 
- // Variabel untuk statistik
  let masuk=0, keluar=0;
  let saldoBarang={};
  
@@ -280,17 +351,16 @@ function render(data){
  let uniqueWeeks = new Set();
  let uniqueMonths = new Set();
 
- // Variabel untuk Line Chart (Hanya Keluar)
  let chartDataMap = {}; 
 
  let tbodyHtml = [];
  let saldoHtml = [];
 
  data.forEach(r=>{
-  let jenis=(r.jenis||'').toLowerCase().trim();
+  // Normalisasi jenis sudah dilakukan saat load (huruf kecil)
+  let jenis = r.jenis; 
   let barang=(r.nama||'').toString().trim();
 
-  // Akumulasi total untuk statistik kartu
   if(jenis==='masuk') masuk+=Number(r.jumlah)||0;
   if(jenis==='keluar') {
       let jumlahKeluar = Number(r.jumlah)||0;
@@ -302,7 +372,6 @@ function render(data){
       if(r.year && r.month) uniqueMonths.add(`${r.year}-${r.month}`);
   }
 
-  // Proses untuk Saldo Barang
   if(barang){
     if(!saldoBarang[barang]){
       saldoBarang[barang]={masuk:0,keluar:0};
@@ -315,9 +384,8 @@ function render(data){
     }
   }
 
-  // Proses untuk Line Chart (Hanya menghitung barang Keluar)
+  // Proses untuk Line Chart (Hanya Keluar)
   if(jenis === 'keluar' && r.dateObj){
-      // Format Key: YYYY-MM-DD untuk sorting
       let dateKey = r.dateObj.toISOString().split('T')[0]; 
       if(!chartDataMap[dateKey]){
           chartDataMap[dateKey] = 0;
@@ -325,11 +393,14 @@ function render(data){
       chartDataMap[dateKey] += jumlahKeluar;
   }
 
+  // Tampilkan Jenis asli di tabel (kapital huruf pertama)
+  let jenisDisplay = jenis.charAt(0).toUpperCase() + jenis.slice(1);
+
   tbodyHtml.push(`
   <tr>
   <td>${r.tanggal}</td>
   <td>${barang}</td>
-  <td><span class="badge ${jenis==='masuk'?'in':'out'}">${r.jenis}</span></td>
+  <td><span class="badge ${jenis==='masuk'?'in':'out'}">${jenisDisplay}</span></td>
   <td>${r.jumlah}</td>
   <td>${r.ket}</td>
   <td>${r.lokasi}</td>
@@ -352,7 +423,6 @@ function render(data){
  tbody.innerHTML = tbodyHtml.join('');
  saldoBody.innerHTML = saldoHtml.join('');
 
- // Update Kartu Statistik
  let avgDayVal = 0;
  let avgWeekVal = 0;
  let avgMonthVal = 0;
@@ -365,44 +435,37 @@ function render(data){
  document.getElementById('avgWeek').innerText = avgWeekVal.toFixed(1);
  document.getElementById('avgMonth').innerText = avgMonthVal.toFixed(1);
 
- // Panggil fungsi menggambar Line Chart
  drawLineChart(chartDataMap);
 }
 
 function drawLineChart(dataMap){
-    // 1. Urutkan tanggal
     let sortedDates = Object.keys(dataMap).sort((a, b) => new Date(a) - new Date(b));
     
-    // 2. Logika Filter 3 Bulan Terakhir (90 hari)
     let monthInput = document.getElementById('monthFilter').value;
     let labels = [];
     let dataKeluar = [];
 
-    // Jika tidak ada filter bulan spesifik, potong data untuk 3 bulan terakhir (default)
     let cutoffDate = null;
     if (!monthInput && sortedDates.length > 0) {
         let lastDate = new Date(sortedDates[sortedDates.length - 1]);
         cutoffDate = new Date(lastDate);
-        cutoffDate.setDate(cutoffDate.getDate() - 90); // Mundur 90 hari (sekitar 3 bulan)
+        cutoffDate.setDate(cutoffDate.getDate() - 90); 
     }
 
     sortedDates.forEach(dateStr => {
         let d = new Date(dateStr);
         
-        // Jika ada cutoff date (mode default 3 bulan), lewati tanggal yang lebih lama
         if (cutoffDate && d < cutoffDate) {
             return;
         }
 
-        // Format Label (DD/MM)
-        let parts = dateStr.split('-'); // YYYY-MM-DD
-        let label = `${parts[2]}/${parts[1]}`; // DD/MM
+        let parts = dateStr.split('-'); 
+        let label = `${parts[2]}/${parts[1]}`; 
         
         labels.push(label);
         dataKeluar.push(dataMap[dateStr]);
     });
 
-    // 3. Render Chart
     let ctx = document.getElementById('lineChart').getContext('2d');
     if(chart) chart.destroy();
     
@@ -414,7 +477,7 @@ function drawLineChart(dataMap){
                 {
                     label: 'Barang Keluar',
                     data: dataKeluar,
-                    borderColor: '#dc2626', // Merah
+                    borderColor: '#dc2626',
                     backgroundColor: 'rgba(220, 38, 38, 0.1)',
                     fill: true,
                     tension: 0.4 
