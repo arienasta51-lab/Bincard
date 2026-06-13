@@ -101,7 +101,6 @@ canvas{max-height:250px}
 </div>
 
 <script>
-// ID Google Sheet Anda
 const SPREADSHEET_ID = "1RzitZC9jifvgtblHDbWxvxK5mge8U0JLpH2HxmAlPWM"; 
 
 let allRows=[];
@@ -148,25 +147,22 @@ window.handleData = function(res){
   let tempRows = [];
   
   let uniqueLocations = new Set();
-  let uniqueCategories = new Set(); // Set untuk menampung kategori unik
+  let uniqueCategories = new Set();
 
   rows.forEach(r=>{
+   // Penyesuaian Indeks Kolom sesuai Gambar Google Sheet Anda
    let tanggalRaw= r.c[0] ? (r.c[0].f || r.c[0].v || '') : '';
    let nama= r.c[1] ? (r.c[1].v || '').toString().trim() : '';
-   
-   // Mengasumsikan struktur kolom Google Sheet Anda: 
-   // Kolom 0: Tanggal, Kolom 1: Nama Barang, Kolom 2: Kategori, Kolom 3: Tipe (Masuk/Keluar), Kolom 4: Jumlah, Kolom 5: Keterangan, Kolom 6: Lokasi
-   // Mengikuti format baru, indeks digeser:
-   let kategori= r.c[2] ? (r.c[2].v || '').toString().trim() : '';
-   let jenis= r.c[3] ? (r.c[3].v || '').toString().trim() : '';
-   let jumlah= r.c[4] ? parseFloat(r.c[4].v || 0) : 0;
-   let ket= r.c[5] ? (r.c[5].v || '').toString().trim() : '';
-   let lokasi= r.c[6] ? (r.c[6].v || '').toString().trim() : '';
+   let jenis= r.c[2] ? (r.c[2].v || '').toString().trim() : '';
+   let jumlah= r.c[3] ? parseFloat(r.c[3].v || 0) : 0;
+   let ket= r.c[4] ? (r.c[4].v || '').toString().trim() : '';
+   let lokasi= r.c[5] ? (r.c[5].v || '').toString().trim() : '';
+   let kategori= r.c[6] ? (r.c[6].v || '').toString().trim() : ''; // Kolom G (Indeks ke-6)
 
    if(!nama && !tanggalRaw && !jenis) return;
 
    if(lokasi) uniqueLocations.add(lokasi);
-   if(kategori) uniqueCategories.add(kategori); // Simpan kategori jika ada
+   if(kategori) uniqueCategories.add(kategori);
 
    let year = null;
    let month = null; 
@@ -206,11 +202,11 @@ window.handleData = function(res){
    tempRows.push({
        tanggal: tanggalRaw, 
        nama, 
-       kategori, // Ditambahkan ke data objek
        jenis, 
        jumlah, 
        ket, 
        lokasi, 
+       kategori,
        month, 
        year, 
        day, 
@@ -222,7 +218,7 @@ window.handleData = function(res){
 
   allRows = tempRows;
   
-  // Isi dropdown Lokasi
+  // Mengisi dropdown filter Lokasi
   let locSelect = document.getElementById('locationFilter');
   while (locSelect.options.length > 1) {
     locSelect.remove(1);
@@ -234,7 +230,7 @@ window.handleData = function(res){
      locSelect.appendChild(option);
   });
 
-  // Isi dropdown Kategori
+  // Mengisi dropdown filter Kategori
   let catSelect = document.getElementById('categoryFilter');
   while (catSelect.options.length > 1) {
     catSelect.remove(1);
@@ -260,7 +256,7 @@ function applyFilters(){
     let search=document.getElementById('searchInput').value.trim().toLowerCase();
     let monthInput=document.getElementById('monthFilter').value;
     let locInput=document.getElementById('locationFilter').value; 
-    let catInput=document.getElementById('categoryFilter').value; // Ambil nilai filter kategori
+    let catInput=document.getElementById('categoryFilter').value;
 
     let data=allRows.filter(r=>{
         let okSearch = !search || (r.searchText || '').includes(search);
@@ -280,7 +276,7 @@ function applyFilters(){
         }
 
         if(catInput){
-            okCat = (r.kategori === catInput); // Jalankan filter kategori
+            okCat = (r.kategori === catInput);
         }
 
         return okSearch && okMonth && okLoc && okCat;
@@ -339,7 +335,7 @@ function render(data){
     }
   }
 
-  // Menambahkan kolom kategori pada baris tabel log transaksi
+  // Tampilan Log Transaksi dengan kolom Kategori
   tbodyHtml.push(`
   <tr>
   <td>${r.tanggal}</td>
@@ -445,14 +441,13 @@ function showAllBarang(){
  document.getElementById('searchInput').value = '';
  document.getElementById('monthFilter').value = '';
  document.getElementById('locationFilter').value = ''; 
- document.getElementById('categoryFilter').value = ''; // Reset filter kategori
+ document.getElementById('categoryFilter').value = ''; 
  render(allRows);
 }
 
 function downloadCSV(){
  let rows=[...document.querySelectorAll('#tbody tr')];
- // Header CSV disesuaikan dengan penambahan kolom kategori
- csv='Tanggal,Barang,Kategori,Tipe,Jumlah,Keterangan,Lokasi\n';
+ let csv='Tanggal,Barang,Kategori,Tipe,Jumlah,Keterangan,Lokasi\n';
  rows.forEach(r=>{
   let c=r.querySelectorAll('td');
   if(c.length){
