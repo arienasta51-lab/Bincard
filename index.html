@@ -49,6 +49,9 @@ canvas{max-height:250px}
 <select id="categoryFilter" onchange="applyFilters()">
     <option value="">Semua Kategori</option>
 </select>
+<select id="areaFilter" onchange="applyFilters()">
+    <option value="">Semua Area Kerja</option>
+</select>
 <button onclick="showAllBarang()">Semua Barang</button>
 <button onclick="downloadCSV()">Download CSV</button>
 <button onclick="loadData()" style="background:#1e293b;">Refresh Data</button>
@@ -87,11 +90,12 @@ canvas{max-height:250px}
 <tr>
 <th>Tanggal</th>
 <th>Barang</th>
-<th>Kategori</th> <th>Tipe</th>
+<th>Kategori</th> 
+<th>Tipe</th>
 <th>Jumlah</th>
 <th>Keterangan</th>
 <th>Lokasi</th>
-</tr>
+<th>Area Kerja</th> </tr>
 </thead>
 <tbody id="tbody"></tbody>
 </table>
@@ -148,9 +152,9 @@ window.handleData = function(res){
   
   let uniqueLocations = new Set();
   let uniqueCategories = new Set();
+  let uniqueAreas = new Set(); // Set Baru untuk Area Kerja
 
   rows.forEach(r=>{
-   // Penyesuaian Indeks Kolom sesuai Gambar Google Sheet Anda
    let tanggalRaw= r.c[0] ? (r.c[0].f || r.c[0].v || '') : '';
    let nama= r.c[1] ? (r.c[1].v || '').toString().trim() : '';
    let jenis= r.c[2] ? (r.c[2].v || '').toString().trim() : '';
@@ -158,11 +162,13 @@ window.handleData = function(res){
    let ket= r.c[4] ? (r.c[4].v || '').toString().trim() : '';
    let lokasi= r.c[5] ? (r.c[5].v || '').toString().trim() : '';
    let kategori= r.c[6] ? (r.c[6].v || '').toString().trim() : ''; // Kolom G (Indeks ke-6)
+   let areaKerja= r.c[7] ? (r.c[7].v || '').toString().trim() : ''; // Kolom H (Indeks ke-7) - Baru
 
    if(!nama && !tanggalRaw && !jenis) return;
 
    if(lokasi) uniqueLocations.add(lokasi);
    if(kategori) uniqueCategories.add(kategori);
+   if(areaKerja) uniqueAreas.add(areaKerja); // Tambah ke data unik area kerja
 
    let year = null;
    let month = null; 
@@ -197,7 +203,8 @@ window.handleData = function(res){
        week = dateObj.getWeekNumber();
    }
 
-   let searchText=(tanggalRaw+' '+nama+' '+kategori+' '+jenis+' '+ket+' '+jumlah+' '+lokasi).toLowerCase();
+   // Menyertakan area kerja ke dalam string pencarian global
+   let searchText=(tanggalRaw+' '+nama+' '+kategori+' '+jenis+' '+ket+' '+jumlah+' '+lokasi+' '+areaKerja).toLowerCase();
    
    tempRows.push({
        tanggal: tanggalRaw, 
@@ -207,6 +214,7 @@ window.handleData = function(res){
        ket, 
        lokasi, 
        kategori,
+       areaKerja, // Ditambahkan ke data objek row
        month, 
        year, 
        day, 
@@ -220,9 +228,7 @@ window.handleData = function(res){
   
   // Mengisi dropdown filter Lokasi
   let locSelect = document.getElementById('locationFilter');
-  while (locSelect.options.length > 1) {
-    locSelect.remove(1);
-  }
+  while (locSelect.options.length > 1) { locSelect.remove(1); }
   [...uniqueLocations].sort().forEach(loc => {
      let option = document.createElement('option');
      option.value = loc;
@@ -232,14 +238,22 @@ window.handleData = function(res){
 
   // Mengisi dropdown filter Kategori
   let catSelect = document.getElementById('categoryFilter');
-  while (catSelect.options.length > 1) {
-    catSelect.remove(1);
-  }
+  while (catSelect.options.length > 1) { catSelect.remove(1); }
   [...uniqueCategories].sort().forEach(cat => {
      let option = document.createElement('option');
      option.value = cat;
      option.text = cat;
      catSelect.appendChild(option);
+  });
+
+  // Mengisi dropdown filter Area Kerja baru
+  let areaSelect = document.getElementById('areaFilter');
+  while (areaSelect.options.length > 1) { areaSelect.remove(1); }
+  [...uniqueAreas].sort().forEach(area => {
+     let option = document.createElement('option');
+     option.value = area;
+     option.text = area;
+     areaSelect.appendChild(option);
   });
 
   applyFilters();
@@ -257,12 +271,14 @@ function applyFilters(){
     let monthInput=document.getElementById('monthFilter').value;
     let locInput=document.getElementById('locationFilter').value; 
     let catInput=document.getElementById('categoryFilter').value;
+    let areaInput=document.getElementById('areaFilter').value; // Input filter baru
 
     let data=allRows.filter(r=>{
         let okSearch = !search || (r.searchText || '').includes(search);
         let okMonth = true;
         let okLoc = true; 
         let okCat = true;
+        let okArea = true; // Kondisi baru
 
         if(monthInput){
             let parts=monthInput.split('-');
@@ -271,15 +287,11 @@ function applyFilters(){
             okMonth=(r.year === filterYear && r.month === filterMonth);
         }
         
-        if(locInput){
-            okLoc = (r.lokasi === locInput);
-        }
+        if(locInput){ okLoc = (r.lokasi === locInput); }
+        if(catInput){ okCat = (r.kategori === catInput); }
+        if(areaInput){ okArea = (r.areaKerja === areaInput); } // Evaluasi filter baru
 
-        if(catInput){
-            okCat = (r.kategori === catInput);
-        }
-
-        return okSearch && okMonth && okLoc && okCat;
+        return okSearch && okMonth && okLoc && okCat && okArea;
     });
 
     render(data);
@@ -335,7 +347,7 @@ function render(data){
     }
   }
 
-  // Tampilan Log Transaksi dengan kolom Kategori
+  // Tampilan Log Transaksi (Menambahkan kolom r.areaKerja)
   tbodyHtml.push(`
   <tr>
   <td>${r.tanggal}</td>
@@ -345,6 +357,7 @@ function render(data){
   <td>${r.jumlah}</td>
   <td>${r.ket}</td>
   <td>${r.lokasi}</td>
+  <td>${r.areaKerja || '-'}</td>
   </tr>`);
  });
 
@@ -442,12 +455,13 @@ function showAllBarang(){
  document.getElementById('monthFilter').value = '';
  document.getElementById('locationFilter').value = ''; 
  document.getElementById('categoryFilter').value = ''; 
+ document.getElementById('areaFilter').value = ''; // Reset filter area baru
  render(allRows);
 }
 
 function downloadCSV(){
  let rows=[...document.querySelectorAll('#tbody tr')];
- let csv='Tanggal,Barang,Kategori,Tipe,Jumlah,Keterangan,Lokasi\n';
+ let csv='Tanggal,Barang,Kategori,Tipe,Jumlah,Keterangan,Lokasi,Area Kerja\n'; // Update Header CSV
  rows.forEach(r=>{
   let c=r.querySelectorAll('td');
   if(c.length){
@@ -456,7 +470,8 @@ function downloadCSV(){
    let jmlText = c[4] ? c[4].innerText : '';
    let ketText = c[5] ? c[5].innerText : '';
    let lokasiText = c[6] ? c[6].innerText : '';
-   csv+=`${c[0].innerText},${c[1].innerText},${katText},${tipeText},${jmlText},${ketText},${lokasiText}\n`;
+   let areaText = c[7] ? c[7].innerText : ''; // Tambah kolom area kerja di CSV
+   csv+=`${c[0].innerText},${c[1].innerText},${katText},${tipeText},${jmlText},${ketText},${lokasiText},${areaText}\n`;
   }
  });
  let blob=new Blob([csv],{type:'text/csv'});
