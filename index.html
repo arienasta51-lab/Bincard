@@ -6,21 +6,22 @@
 <title>BIN CARD Dashboard Live</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
-body{font-family:Segoe UI,sans-serif;background:#f4f7fb;margin:0;padding:20px;color:#1e293b}
+body{font-family:'Segoe UI',sans-serif;background:#f4f7fb;margin:0;padding:20px;color:#1e293b}
 .container{max-width:1300px;margin:auto}
 h1{margin:0}
 .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
 .card{background:#fff;border-radius:14px;padding:18px;box-shadow:0 3px 12px rgba(0,0,0,.08)}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px;margin-bottom:20px}
 .stat{font-size:28px;font-weight:bold}
+.stat-sub{font-size:12px;color:#64748b;margin-top:2px}
 .controls{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px}
 input,select,button{padding:10px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px}
 button{background:#2563eb;color:white;border:none;cursor:pointer}
 button:hover{background:#1d4ed8}
 table{width:100%;border-collapse:collapse;background:white;border-radius:10px;overflow:hidden}
-th,td{padding:10px;border-bottom:1px solid #e2e8f0;text-align:left}
-th{background:#e2e8f0}
-.badge{padding:4px 8px;border-radius:5px;color:white;font-size:12px}
+th,td{padding:12px 10px;border-bottom:1px solid #e2e8f0;text-align:left}
+th{background:#f1f5f9;font-weight:600;color:#475569}
+.badge{padding:4px 8px;border-radius:5px;color:white;font-size:12px;font-weight:600}
 .in{background:#16a34a}
 .out{background:#dc2626}
 .section{margin-top:20px}
@@ -28,15 +29,21 @@ th{background:#e2e8f0}
 canvas{max-height:250px}
 #error{color:#2563eb;margin:10px 0;font-weight:bold}
 .card.info { border-left: 5px solid #2563eb; }
+.text-stock-awal { color: #64748b; font-weight: 500; }
+.text-masuk { color: #16a34a; font-weight: 500; }
+.text-keluar { color: #dc2626; font-weight: 500; }
+.text-saldo { color: #0f172a; font-weight: bold; display: flex; align-items: center; justify-content: space-between; }
+.text-batas-order { color: #d97706; font-weight: bold; }
 </style>
 </head>
 <body>
 <div class="container">
 
+<!-- STREAMING_CHUNK: Merender komponen header dan filter pencarian data -->
 <div class="header">
 <div>
 <h1>📦 BIN CARD Dashboard Live</h1>
-<div>Adaro Persada Mandiri - MK & Cyber 2</div>
+<div style="color: #64748b; margin-top: 4px;">Adaro Persada Mandiri - MK & Cyber 2</div>
 </div>
 </div>
 
@@ -59,23 +66,46 @@ canvas{max-height:250px}
 
 <div id="error">Sedang memuat data...</div>
 
+<!-- STREAMING_CHUNK: Menampilkan widget rangkuman KPI rata-rata hari kerja -->
 <div class="grid">
-    <div class="card info"><div>Rata-rata Keluar/Hari</div><div class="stat" id="avgDay">0</div></div>
-    <div class="card info"><div>Rata-rata Keluar/Minggu</div><div class="stat" id="avgWeek">0</div></div>
-    <div class="card info"><div>Rata-rata Keluar/Bulan</div><div class="stat" id="avgMonth">0</div></div>
+    <div class="card info">
+        <div>Rata-rata Keluar/Hari Kerja</div>
+        <div class="stat" id="avgDay">0</div>
+        <div class="stat-sub">Senin - Jumat (Sabtu & Minggu Off)</div>
+    </div>
+    <div class="card info">
+        <div>Rata-rata Keluar/Minggu Kerja</div>
+        <div class="stat" id="avgWeek">0</div>
+        <div class="stat-sub">Senin - Jumat (Sabtu & Minggu Off)</div>
+    </div>
+    <div class="card info">
+        <div>Rata-rata Keluar/Bulan Kerja</div>
+        <div class="stat" id="avgMonth">0</div>
+        <div class="stat-sub">Senin - Jumat (Sabtu & Minggu Off)</div>
+    </div>
 </div>
 
-<div class="grid">
+<div class="grid" style="grid-template-columns: 1.2fr 1fr;">
 <div class="card">
-<h3>Data Keluar Barang (3 Bulan Terakhir)</h3>
+<h3 id="chartTitle">Data Keluar Barang</h3>
 <canvas id="lineChart"></canvas>
 </div>
 
+<!-- STREAMING_CHUNK: Menyiapkan tabel Saldo Akhir dengan penambahan kolom Batas Order -->
 <div class="card">
 <h3>Saldo Akhir per Barang</h3>
 <div class="scroll">
 <table>
-<thead><tr><th>Barang</th><th>Masuk</th><th>Keluar</th><th>Saldo</th></tr></thead>
+<thead>
+  <tr>
+    <th>Barang</th>
+    <th>Stock Awal</th>
+    <th>Masuk</th>
+    <th>Keluar</th>
+    <th>Saldo</th>
+    <th>Batas Order</th>
+  </tr>
+</thead>
 <tbody id="saldoBody"></tbody>
 </table>
 </div>
@@ -137,6 +167,7 @@ Date.prototype.getWeekNumber = function() {
     return Math.ceil((((d - yearStart) / 86400000) + 1)/7);
 };
 
+// STREAMING_CHUNK: Memproses respons data mentah dari Google Sheet API
 window.handleData = function(res){
  try{
   allRows=[];
@@ -152,7 +183,7 @@ window.handleData = function(res){
   
   let uniqueLocations = new Set();
   let uniqueCategories = new Set();
-  let uniqueAreas = new Set(); // Set Baru untuk Area Kerja
+  let uniqueAreas = new Set();
 
   rows.forEach(r=>{
    let tanggalRaw= r.c[0] ? (r.c[0].f || r.c[0].v || '') : '';
@@ -161,14 +192,14 @@ window.handleData = function(res){
    let jumlah= r.c[3] ? parseFloat(r.c[3].v || 0) : 0;
    let ket= r.c[4] ? (r.c[4].v || '').toString().trim() : '';
    let lokasi= r.c[5] ? (r.c[5].v || '').toString().trim() : '';
-   let kategori= r.c[6] ? (r.c[6].v || '').toString().trim() : ''; // Kolom G (Indeks ke-6)
-   let areaKerja= r.c[7] ? (r.c[7].v || '').toString().trim() : ''; // Kolom H (Indeks ke-7) - Baru
+   let kategori= r.c[6] ? (r.c[6].v || '').toString().trim() : ''; 
+   let areaKerja= r.c[7] ? (r.c[7].v || '').toString().trim() : ''; 
 
    if(!nama && !tanggalRaw && !jenis) return;
 
    if(lokasi) uniqueLocations.add(lokasi);
    if(kategori) uniqueCategories.add(kategori);
-   if(areaKerja) uniqueAreas.add(areaKerja); // Tambah ke data unik area kerja
+   if(areaKerja) uniqueAreas.add(areaKerja); 
 
    let year = null;
    let month = null; 
@@ -203,7 +234,6 @@ window.handleData = function(res){
        week = dateObj.getWeekNumber();
    }
 
-   // Menyertakan area kerja ke dalam string pencarian global
    let searchText=(tanggalRaw+' '+nama+' '+kategori+' '+jenis+' '+ket+' '+jumlah+' '+lokasi+' '+areaKerja).toLowerCase();
    
    tempRows.push({
@@ -214,7 +244,7 @@ window.handleData = function(res){
        ket, 
        lokasi, 
        kategori,
-       areaKerja, // Ditambahkan ke data objek row
+       areaKerja, 
        month, 
        year, 
        day, 
@@ -226,7 +256,6 @@ window.handleData = function(res){
 
   allRows = tempRows;
   
-  // Mengisi dropdown filter Lokasi
   let locSelect = document.getElementById('locationFilter');
   while (locSelect.options.length > 1) { locSelect.remove(1); }
   [...uniqueLocations].sort().forEach(loc => {
@@ -236,7 +265,6 @@ window.handleData = function(res){
      locSelect.appendChild(option);
   });
 
-  // Mengisi dropdown filter Kategori
   let catSelect = document.getElementById('categoryFilter');
   while (catSelect.options.length > 1) { catSelect.remove(1); }
   [...uniqueCategories].sort().forEach(cat => {
@@ -246,7 +274,6 @@ window.handleData = function(res){
      catSelect.appendChild(option);
   });
 
-  // Mengisi dropdown filter Area Kerja baru
   let areaSelect = document.getElementById('areaFilter');
   while (areaSelect.options.length > 1) { areaSelect.remove(1); }
   [...uniqueAreas].sort().forEach(area => {
@@ -259,11 +286,12 @@ window.handleData = function(res){
   applyFilters();
 
  }catch(e){
-  console.log(e);
+  console.error(e);
   document.getElementById('error').innerText='Gagal membaca data dari Google Sheet. Cek kembali setelan Share link Anda.';
  }
 }
 
+// STREAMING_CHUNK: Menyaring baris data berdasarkan input pencarian dan filter aktif
 function applyFilters(){
  clearTimeout(filterTimeout);
  filterTimeout = setTimeout(() => {
@@ -271,14 +299,14 @@ function applyFilters(){
     let monthInput=document.getElementById('monthFilter').value;
     let locInput=document.getElementById('locationFilter').value; 
     let catInput=document.getElementById('categoryFilter').value;
-    let areaInput=document.getElementById('areaFilter').value; // Input filter baru
+    let areaInput=document.getElementById('areaFilter').value; 
 
     let data=allRows.filter(r=>{
         let okSearch = !search || (r.searchText || '').includes(search);
         let okMonth = true;
         let okLoc = true; 
         let okCat = true;
-        let okArea = true; // Kondisi baru
+        let okArea = true; 
 
         if(monthInput){
             let parts=monthInput.split('-');
@@ -289,7 +317,7 @@ function applyFilters(){
         
         if(locInput){ okLoc = (r.lokasi === locInput); }
         if(catInput){ okCat = (r.kategori === catInput); }
-        if(areaInput){ okArea = (r.areaKerja === areaInput); } // Evaluasi filter baru
+        if(areaInput){ okArea = (r.areaKerja === areaInput); } 
 
         return okSearch && okMonth && okLoc && okCat && okArea;
     });
@@ -298,33 +326,53 @@ function applyFilters(){
  }, 150);
 }
 
+// STREAMING_CHUNK: Merender tabel, melakukan kalkulasi Batas Order, dan mengevaluasi status stok
 function render(data){
  let tbody=document.getElementById('tbody');
  let saldoBody=document.getElementById('saldoBody');
 
- let masuk=0, keluar=0;
- let saldoBarang={};
- 
  let keluarTotalJumlah = 0;
  let uniqueDays = new Set();
  let uniqueWeeks = new Set();
  let uniqueMonths = new Set();
 
- let tbodyHtml = [];
- let saldoHtml = [];
+ let keluarWorkdayJumlah = 0;
+ let uniqueWorkdays = new Set();
+ let uniqueWorkweeks = new Set();
+ let uniqueWorkmonths = new Set();
 
- let monthlyOutData = {};
+ let tbodyHtml = [];
+ 
+ let dailyOutData = {};   
+ let monthlyOutData = {}; 
+
+ let monthInput = document.getElementById('monthFilter').value;
+ let filterYear = null;
+ let filterMonth = null;
+ if (monthInput) {
+     let parts = monthInput.split('-');
+     filterYear = parseInt(parts[0]);
+     filterMonth = parseInt(parts[1]);
+ }
 
  data.forEach(r=>{
   let jenis=(r.jenis||'').toLowerCase().trim();
   let barang=(r.nama||'').toString().trim();
 
-  if(jenis==='masuk') masuk+=Number(r.jumlah)||0;
   if(jenis==='keluar') {
       let jumlahKeluar = Number(r.jumlah)||0;
-      keluar+=jumlahKeluar;
-      
       keluarTotalJumlah += jumlahKeluar;
+      
+      let dayOfWeek = r.dateObj ? r.dateObj.getDay() : null;
+      let isWorkday = (dayOfWeek !== null && dayOfWeek !== 0 && dayOfWeek !== 6);
+
+      if (isWorkday) {
+          keluarWorkdayJumlah += jumlahKeluar;
+          if(r.year && r.month && r.day) uniqueWorkdays.add(`${r.year}-${r.month}-${r.day}`);
+          if(r.year && r.week) uniqueWorkweeks.add(`${r.year}-${r.week}`);
+          if(r.year && r.month) uniqueWorkmonths.add(`${r.year}-${r.month}`);
+      }
+
       if(r.year && r.month && r.day) uniqueDays.add(`${r.year}-${r.month}-${r.day}`);
       if(r.year && r.week) uniqueWeeks.add(`${r.year}-${r.week}`);
       if(r.year && r.month) uniqueMonths.add(`${r.year}-${r.month}`);
@@ -333,21 +381,12 @@ function render(data){
           let key = `${r.year}-${String(r.month).padStart(2, '0')}`;
           monthlyOutData[key] = (monthlyOutData[key] || 0) + jumlahKeluar;
       }
+
+      if(monthInput && r.year === filterYear && r.month === filterMonth && r.day) {
+          dailyOutData[r.day] = (dailyOutData[r.day] || 0) + jumlahKeluar;
+      }
   }
 
-  if(barang){
-    if(!saldoBarang[barang]){
-      saldoBarang[barang]={masuk:0,keluar:0};
-    }
-    if(jenis==='masuk'){
-      saldoBarang[barang].masuk += Number(r.jumlah)||0;
-    }
-    if(jenis==='keluar'){
-      saldoBarang[barang].keluar += Number(r.jumlah)||0;
-    }
-  }
-
-  // Tampilan Log Transaksi (Menambahkan kolom r.areaKerja)
   tbodyHtml.push(`
   <tr>
   <td>${r.tanggal}</td>
@@ -361,43 +400,146 @@ function render(data){
   </tr>`);
  });
 
- Object.keys(saldoBarang).sort().forEach(b=>{
-    let s=saldoBarang[b];
-    let saldo=(s.masuk-s.keluar);
+ tbody.innerHTML = tbodyHtml.join('');
 
-    saldoHtml.push(`
-    <tr>
-      <td>${b}</td>
-      <td>${s.masuk}</td>
-      <td>${s.keluar}</td>
-      <td><b>${saldo}</b></td>
-    </tr>`);
+ let locInput = document.getElementById('locationFilter').value; 
+ let catInput = document.getElementById('categoryFilter').value;
+ let areaInput = document.getElementById('areaFilter').value;
+ let search = document.getElementById('searchInput').value.trim().toLowerCase();
+
+ // 1. Hitung Saldo Real-Time (Stock Awal, Masuk, Keluar)
+ let saldoBarang = {};
+ allRows.forEach(r => {
+     let okSearch = !search || (r.searchText || '').includes(search);
+     let okLoc = !locInput || (r.lokasi === locInput);
+     let okCat = !catInput || (r.kategori === catInput);
+     let okArea = !areaInput || (r.areaKerja === areaInput);
+
+     if (okSearch && okLoc && okCat && okArea) {
+         let barang = (r.nama || '').toString().trim();
+         if (!barang) return;
+
+         if (!saldoBarang[barang]) {
+             saldoBarang[barang] = { stockAwal: 0, masuk: 0, keluar: 0 };
+         }
+
+         let jenis = (r.jenis || '').toLowerCase().trim();
+         let val = Number(r.jumlah) || 0;
+
+         if (monthInput) {
+             let isBefore = false;
+             let isCurrent = false;
+
+             if (r.year < filterYear) {
+                 isBefore = true;
+             } else if (r.year === filterYear) {
+                 if (r.month < filterMonth) {
+                     isBefore = true;
+                 } else if (r.month === filterMonth) {
+                     isCurrent = true;
+                 }
+             }
+
+             if (isBefore) {
+                 if (jenis === 'masuk') saldoBarang[barang].stockAwal += val;
+                 if (jenis === 'keluar') saldoBarang[barang].stockAwal -= val;
+             } else if (isCurrent) {
+                 if (jenis === 'masuk') saldoBarang[barang].masuk += val;
+                 if (jenis === 'keluar') saldoBarang[barang].keluar += val;
+             }
+         } else {
+             if (jenis === 'masuk') saldoBarang[barang].masuk += val;
+             if (jenis === 'keluar') saldoBarang[barang].keluar += val;
+         }
+     }
  });
 
- tbody.innerHTML = tbodyHtml.join('');
+ // 2. Hitung Rata-rata Bulanan Historis (All-Time) Murni Hari Kerja untuk Batas Order
+ let historicalWorkdayKeluar = {}; 
+ let overallActiveMonths = new Set(); 
+
+ allRows.forEach(r => {
+     let okSearch = !search || (r.searchText || '').includes(search);
+     let okLoc = !locInput || (r.lokasi === locInput);
+     let okCat = !catInput || (r.kategori === catInput);
+     let okArea = !areaInput || (r.areaKerja === areaInput);
+
+     if (okSearch && okLoc && okCat && okArea) {
+         let barang = (r.nama || '').toString().trim();
+         if (!barang) return;
+
+         let jenis = (r.jenis || '').toLowerCase().trim();
+         let val = Number(r.jumlah) || 0;
+
+         let dayOfWeek = r.dateObj ? r.dateObj.getDay() : null;
+         let isWorkday = (dayOfWeek !== null && dayOfWeek !== 0 && dayOfWeek !== 6);
+
+         if (jenis === 'keluar' && isWorkday) {
+             historicalWorkdayKeluar[barang] = (historicalWorkdayKeluar[barang] || 0) + val;
+             if (r.year && r.month) {
+                 overallActiveMonths.add(`${r.year}-${r.month}`);
+             }
+         }
+     }
+ });
+
+ let totalActiveMonths = overallActiveMonths.size || 1;
+
+ // 3. Bangun Tabel Saldo Akhir dengan Kolom Batas Order & Indikator Peringatan
+ let saldoHtml = [];
+ Object.keys(saldoBarang).sort().forEach(b => {
+    let s = saldoBarang[b];
+    let saldo = s.stockAwal + s.masuk - s.keluar;
+
+    let totalKeluarHistoris = historicalWorkdayKeluar[b] || 0;
+    let avgMonthlyKeluar = totalKeluarHistoris / totalActiveMonths;
+
+    let warningBadge = '';
+    if (saldo <= avgMonthlyKeluar && avgMonthlyKeluar > 0) {
+        warningBadge = ` <span class="badge out" style="padding: 2px 6px; font-size: 10px; border-radius: 4px;" title="Segera lakukan pemesanan ulang!">Reorder</span>`;
+    }
+
+    if (s.stockAwal !== 0 || s.masuk !== 0 || s.keluar !== 0 || saldo !== 0) {
+        saldoHtml.push(`
+        <tr>
+          <td>${b}</td>
+          <td class="text-stock-awal">${s.stockAwal}</td>
+          <td class="text-masuk">${s.masuk}</td>
+          <td class="text-keluar">${s.keluar}</td>
+          <td class="text-saldo">
+             <span>${saldo}</span>
+             ${warningBadge}
+          </td>
+          <td class="text-batas-order">${avgMonthlyKeluar.toFixed(1)}</td>
+        </tr>`);
+    }
+ });
+
  saldoBody.innerHTML = saldoHtml.join('');
 
  let avgDayVal = 0;
  let avgWeekVal = 0;
  let avgMonthVal = 0;
 
- if(uniqueDays.size > 0) avgDayVal = keluarTotalJumlah / uniqueDays.size;
- if(uniqueWeeks.size > 0) avgWeekVal = keluarTotalJumlah / uniqueWeeks.size;
- if(uniqueMonths.size > 0) avgMonthVal = keluarTotalJumlah / uniqueMonths.size;
+ if(uniqueWorkdays.size > 0) avgDayVal = keluarWorkdayJumlah / uniqueWorkdays.size;
+ if(uniqueWorkweeks.size > 0) avgWeekVal = keluarWorkdayJumlah / uniqueWorkweeks.size;
+ if(uniqueWorkmonths.size > 0) avgMonthVal = keluarWorkdayJumlah / uniqueWorkmonths.size;
 
  document.getElementById('avgDay').innerText = avgDayVal.toFixed(1);
  document.getElementById('avgWeek').innerText = avgWeekVal.toFixed(1);
  document.getElementById('avgMonth').innerText = avgMonthVal.toFixed(1);
 
- drawLineChart(monthlyOutData);
+ updateDynamicChart(monthInput, filterYear, filterMonth, dailyOutData, monthlyOutData);
 }
 
-function drawLineChart(monthlyOutData){
+// STREAMING_CHUNK: Menggambar grafik garis dinamis berdasarkan filter harian/bulanan
+function updateDynamicChart(monthInput, filterYear, filterMonth, dailyOutData, monthlyOutData) {
  let ctx=document.getElementById('lineChart');
  if(chart) chart.destroy();
 
- let sortedMonths = Object.keys(monthlyOutData).sort();
- let lastThreeMonths = sortedMonths.slice(-4);
+ let labels = [];
+ let chartData = [];
+ let titleElement = document.getElementById('chartTitle');
 
  const monthNames = {
      "01": "Januari", "02": "Februari", "03": "Maret", "04": "April", 
@@ -405,44 +547,73 @@ function drawLineChart(monthlyOutData){
      "09": "September", "10": "Oktober", "11": "November", "12": "Desember"
  };
 
- let labels = [];
- let chartData = [];
+ if (monthInput) {
+     let selectedMonthName = monthNames[String(filterMonth).padStart(2, '0')] || '';
+     titleElement.innerText = `Tren Keluar Harian (${selectedMonthName} ${filterYear})`;
 
- lastThreeMonths.forEach(mKey => {
-     let parts = mKey.split('-'); 
-     labels.push(`${monthNames[parts[1]]} ${parts[0]}`);
-     chartData.push(monthlyOutData[mKey]);
- });
+     let totalDays = new Date(filterYear, filterMonth, 0).getDate();
+     
+     for (let d = 1; d <= totalDays; d++) {
+         labels.push(`Tgl ${d}`);
+         chartData.push(dailyOutData[d] || 0); 
+     }
+ } else {
+     titleElement.innerText = "Tren Keluar Bulanan (Histori All-Time)";
 
- if(labels.length === 0) {
-     labels = ["Tidak Ada Data Keluar"];
-     chartData = [0];
+     let sortedMonths = Object.keys(monthlyOutData).sort();
+     let lastMonths = sortedMonths.slice(-12);
+
+     lastMonths.forEach(mKey => {
+         let parts = mKey.split('-'); 
+         labels.push(`${monthNames[parts[1]]} ${parts[0]}`);
+         chartData.push(monthlyOutData[mKey]);
+     });
+
+     if(labels.length === 0) {
+         labels = ["Tidak Ada Data Keluar"];
+         chartData = [0];
+     }
  }
 
- chart=new Chart(ctx,{
-  type:'line',
-  data:{
+ chart = new Chart(ctx, {
+  type: 'line',
+  data: {
    labels: labels,
-   datasets:[{
+   datasets: [{
        label: 'Jumlah Barang Keluar',
        data: chartData,
        borderColor: '#dc2626',
-       backgroundColor: 'rgba(220, 38, 38, 0.1)',
-       borderWidth: 3,
-       tension: 0.3,
+       backgroundColor: 'rgba(220, 38, 38, 0.08)',
+       borderWidth: 2.5,
+       tension: 0.35, 
        fill: true,
-       pointRadius: 5,
+       pointRadius: 4,
+       pointHoverRadius: 6,
        pointBackgroundColor: '#dc2626'
    }]
   },
-  options:{
+  options: {
    responsive: true,
-   animation: false,
+   maintainAspectRatio: false,
+   plugins: {
+       legend: {
+           display: false 
+       }
+   },
    scales: {
+       x: {
+           grid: {
+               display: false 
+           },
+           ticks: {
+               font: { size: 11 }
+           }
+       },
        y: {
            beginAtZero: true,
            ticks: {
-               stepSize: 1
+               stepSize: 1,
+               font: { size: 11 }
            }
        }
    }
@@ -455,13 +626,14 @@ function showAllBarang(){
  document.getElementById('monthFilter').value = '';
  document.getElementById('locationFilter').value = ''; 
  document.getElementById('categoryFilter').value = ''; 
- document.getElementById('areaFilter').value = ''; // Reset filter area baru
- render(allRows);
+ document.getElementById('areaFilter').value = ''; 
+ applyFilters();
 }
 
+// STREAMING_CHUNK: Mengunduh data log transaksi aktif ke dalam berkas CSV
 function downloadCSV(){
  let rows=[...document.querySelectorAll('#tbody tr')];
- let csv='Tanggal,Barang,Kategori,Tipe,Jumlah,Keterangan,Lokasi,Area Kerja\n'; // Update Header CSV
+ let csv='Tanggal,Barang,Kategori,Tipe,Jumlah,Keterangan,Lokasi,Area Kerja\n'; 
  rows.forEach(r=>{
   let c=r.querySelectorAll('td');
   if(c.length){
@@ -470,11 +642,11 @@ function downloadCSV(){
    let jmlText = c[4] ? c[4].innerText : '';
    let ketText = c[5] ? c[5].innerText : '';
    let lokasiText = c[6] ? c[6].innerText : '';
-   let areaText = c[7] ? c[7].innerText : ''; // Tambah kolom area kerja di CSV
-   csv+=`${c[0].innerText},${c[1].innerText},${katText},${tipeText},${jmlText},${ketText},${lokasiText},${areaText}\n`;
+   let areaText = c[7] ? c[7].innerText : ''; 
+   csv+=`"${c[0].innerText}","${c[1].innerText}","${katText}","${tipeText}","${jmlText}","${ketText}","${lokasiText}","${areaText}"\n`;
   }
  });
- let blob=new Blob([csv],{type:'text/csv'});
+ let blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
  let a=document.createElement('a');
  a.href=URL.createObjectURL(blob);
  a.download='bincard.csv';
