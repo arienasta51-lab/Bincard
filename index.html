@@ -6,40 +6,108 @@
 <title>BIN CARD Dashboard Live</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
-body{font-family:'Segoe UI',sans-serif;background:#f4f7fb;margin:0;padding:20px;color:#1e293b}
+/* Reset & Gaya Dasar Premium */
+body{font-family:'Segoe UI', system-ui, -apple-system, sans-serif;background:#f4f7fb;margin:0;padding:20px;color:#1e293b}
 .container{max-width:1300px;margin:auto}
 h1{margin:0}
 .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
 .card{background:#fff;border-radius:14px;padding:18px;box-shadow:0 3px 12px rgba(0,0,0,.08)}
+
+/* Grid Responsif yang Fleksibel */
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px;margin-bottom:20px}
+.grid-split {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+@media (min-width: 1024px) {
+    .grid-split {
+        grid-template-columns: 1.1fr 1fr; /* Sedikit memperlebar sisi kanan tabel */
+    }
+}
+
 .stat{font-size:28px;font-weight:bold}
 .stat-sub{font-size:12px;color:#64748b;margin-top:2px}
 .controls{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px}
 input,select,button{padding:10px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px}
-button{background:#2563eb;color:white;border:none;cursor:pointer}
+button{background:#2563eb;color:white;border:none;cursor:pointer;transition: background 0.2s;}
 button:hover{background:#1d4ed8}
-table{width:100%;border-collapse:collapse;background:white;border-radius:10px;overflow:hidden}
-th,td{padding:12px 10px;border-bottom:1px solid #e2e8f0;text-align:left}
-th{background:#f1f5f9;font-weight:600;color:#475569}
+
+/* Desain Tabel Premium & Lebih Lega */
+table{width:100%;border-collapse:collapse;background:white;font-size:13.5px}
+th,td{padding:12px 14px;border-bottom:1px solid #e2e8f0;text-align:left}
+
+/* Sticky Header & Desain Th */
+th{
+    background:#f8fafc;
+    font-weight:600;
+    color:#475569;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    box-shadow: inset 0 -1px 0 #e2e8f0;
+}
+
+/* Penyelarasan Alinyemen Kolom Finansial */
+.text-right { text-align: right; }
+.text-center { text-align: center; }
+
+/* Efek Hover & Baris Belang */
+tbody tr:nth-child(even) { background-color: #f8fafc; }
+tbody tr:hover { background-color: #f1f5f9; transition: background-color 0.15s ease; }
+
 .badge{padding:4px 8px;border-radius:5px;color:white;font-size:12px;font-weight:600}
 .in{background:#16a34a}
 .out{background:#dc2626}
 .section{margin-top:20px}
-.scroll{max-height:350px;overflow:auto}
+
+/* Scrollbar Minimalis Cantik */
+.scroll{
+    max-height:360px;
+    overflow-y:auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+}
+.scroll::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+.scroll::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 10px;
+}
+.scroll::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 10px;
+}
+.scroll::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
 canvas{max-height:250px}
 #error{color:#2563eb;margin:10px 0;font-weight:bold}
 .card.info { border-left: 5px solid #2563eb; }
+
+/* Skema Pewarnaan Data Saldo */
 .text-stock-awal { color: #64748b; font-weight: 500; }
 .text-masuk { color: #16a34a; font-weight: 500; }
 .text-keluar { color: #dc2626; font-weight: 500; }
-.text-saldo { color: #0f172a; font-weight: bold; display: flex; align-items: center; justify-content: space-between; }
+.text-saldo { 
+    color: #0f172a; 
+    font-weight: bold; 
+    display: flex; 
+    align-items: center; 
+    justify-content: flex-end; 
+    gap: 6px; 
+}
 .text-batas-order { color: #d97706; font-weight: bold; }
 </style>
 </head>
 <body>
 <div class="container">
 
-<!-- STREAMING_CHUNK: Merender komponen header dan filter pencarian data -->
+<!-- STREAMING_CHUNK: Menyusun bagian header aplikasi dan filter interaktif -->
 <div class="header">
 <div>
 <h1>📦 BIN CARD Dashboard Live</h1>
@@ -66,7 +134,7 @@ canvas{max-height:250px}
 
 <div id="error">Sedang memuat data...</div>
 
-<!-- STREAMING_CHUNK: Menampilkan widget rangkuman KPI rata-rata hari kerja -->
+<!-- STREAMING_CHUNK: Membuat kartu ringkasan rata-rata pengeluaran hari kerja -->
 <div class="grid">
     <div class="card info">
         <div>Rata-rata Keluar/Hari Kerja</div>
@@ -85,13 +153,14 @@ canvas{max-height:250px}
     </div>
 </div>
 
-<div class="grid" style="grid-template-columns: 1.2fr 1fr;">
+<!-- Menggunakan grid-split untuk tata letak desktop yang lega dan seimbang -->
+<div class="grid-split">
 <div class="card">
 <h3 id="chartTitle">Data Keluar Barang</h3>
 <canvas id="lineChart"></canvas>
 </div>
 
-<!-- STREAMING_CHUNK: Menyiapkan tabel Saldo Akhir dengan penambahan kolom Batas Order -->
+<!-- STREAMING_CHUNK: Merender tabel Saldo Akhir dengan alinyemen kolom yang dioptimalkan -->
 <div class="card">
 <h3>Saldo Akhir per Barang</h3>
 <div class="scroll">
@@ -99,11 +168,11 @@ canvas{max-height:250px}
 <thead>
   <tr>
     <th>Barang</th>
-    <th>Stock Awal</th>
-    <th>Masuk</th>
-    <th>Keluar</th>
-    <th>Saldo</th>
-    <th>Batas Order</th>
+    <th class="text-right">Stock Awal</th>
+    <th class="text-right">Masuk</th>
+    <th class="text-right">Keluar</th>
+    <th class="text-right">Saldo</th>
+    <th class="text-right">Batas Order</th>
   </tr>
 </thead>
 <tbody id="saldoBody"></tbody>
@@ -167,7 +236,7 @@ Date.prototype.getWeekNumber = function() {
     return Math.ceil((((d - yearStart) / 86400000) + 1)/7);
 };
 
-// STREAMING_CHUNK: Memproses respons data mentah dari Google Sheet API
+// STREAMING_CHUNK: Memetakan struktur data baris dari response Google Spreadsheet
 window.handleData = function(res){
  try{
   allRows=[];
@@ -291,7 +360,6 @@ window.handleData = function(res){
  }
 }
 
-// STREAMING_CHUNK: Menyaring baris data berdasarkan input pencarian dan filter aktif
 function applyFilters(){
  clearTimeout(filterTimeout);
  filterTimeout = setTimeout(() => {
@@ -326,7 +394,7 @@ function applyFilters(){
  }, 150);
 }
 
-// STREAMING_CHUNK: Merender tabel, melakukan kalkulasi Batas Order, dan mengevaluasi status stok
+// STREAMING_CHUNK: Melakukan komputasi matematika stok akhir, batas order, dan merender HTML tabel
 function render(data){
  let tbody=document.getElementById('tbody');
  let saldoBody=document.getElementById('saldoBody');
@@ -407,7 +475,7 @@ function render(data){
  let areaInput = document.getElementById('areaFilter').value;
  let search = document.getElementById('searchInput').value.trim().toLowerCase();
 
- // 1. Hitung Saldo Real-Time (Stock Awal, Masuk, Keluar)
+ // 1. Hitung Saldo Real-Time
  let saldoBarang = {};
  allRows.forEach(r => {
      let okSearch = !search || (r.searchText || '').includes(search);
@@ -485,7 +553,7 @@ function render(data){
 
  let totalActiveMonths = overallActiveMonths.size || 1;
 
- // 3. Bangun Tabel Saldo Akhir dengan Kolom Batas Order & Indikator Peringatan
+ // 3. Bangun Tabel Saldo Akhir yang Rapi & Sejajar Lurus
  let saldoHtml = [];
  Object.keys(saldoBarang).sort().forEach(b => {
     let s = saldoBarang[b];
@@ -496,21 +564,23 @@ function render(data){
 
     let warningBadge = '';
     if (saldo <= avgMonthlyKeluar && avgMonthlyKeluar > 0) {
-        warningBadge = ` <span class="badge out" style="padding: 2px 6px; font-size: 10px; border-radius: 4px;" title="Segera lakukan pemesanan ulang!">Reorder</span>`;
+        warningBadge = `<span class="badge out" style="padding: 2px 6px; font-size: 10px; border-radius: 4px;" title="Segera lakukan pemesanan ulang!">Reorder</span>`;
     }
 
     if (s.stockAwal !== 0 || s.masuk !== 0 || s.keluar !== 0 || saldo !== 0) {
         saldoHtml.push(`
         <tr>
-          <td>${b}</td>
-          <td class="text-stock-awal">${s.stockAwal}</td>
-          <td class="text-masuk">${s.masuk}</td>
-          <td class="text-keluar">${s.keluar}</td>
-          <td class="text-saldo">
-             <span>${saldo}</span>
-             ${warningBadge}
+          <td style="font-weight: 500;">${b}</td>
+          <td class="text-stock-awal text-right">${s.stockAwal}</td>
+          <td class="text-masuk text-right">${s.masuk}</td>
+          <td class="text-keluar text-right">${s.keluar}</td>
+          <td class="text-right">
+             <div class="text-saldo">
+                ${warningBadge}
+                <span>${saldo}</span>
+             </div>
           </td>
-          <td class="text-batas-order">${avgMonthlyKeluar.toFixed(1)}</td>
+          <td class="text-batas-order text-right">${avgMonthlyKeluar.toFixed(1)}</td>
         </tr>`);
     }
  });
@@ -532,7 +602,7 @@ function render(data){
  updateDynamicChart(monthInput, filterYear, filterMonth, dailyOutData, monthlyOutData);
 }
 
-// STREAMING_CHUNK: Menggambar grafik garis dinamis berdasarkan filter harian/bulanan
+// STREAMING_CHUNK: Menggambar grafik garis yang terintegrasi penuh dengan penyesuaian filter aktif
 function updateDynamicChart(monthInput, filterYear, filterMonth, dailyOutData, monthlyOutData) {
  let ctx=document.getElementById('lineChart');
  if(chart) chart.destroy();
@@ -630,7 +700,6 @@ function showAllBarang(){
  applyFilters();
 }
 
-// STREAMING_CHUNK: Mengunduh data log transaksi aktif ke dalam berkas CSV
 function downloadCSV(){
  let rows=[...document.querySelectorAll('#tbody tr')];
  let csv='Tanggal,Barang,Kategori,Tipe,Jumlah,Keterangan,Lokasi,Area Kerja\n'; 
