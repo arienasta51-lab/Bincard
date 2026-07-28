@@ -292,13 +292,13 @@ canvas { max-height: 250px; }
                 <tr>
                     <th>Tanggal</th>
                     <th>Nama Barang</th>
-                    <th>Satuan</th>
                     <th>Jenis</th>
                     <th class="text-right">Jumlah</th>
                     <th>Keterangan</th>
                     <th>Lokasi</th>
                     <th>Kategori</th>
                     <th>Area Kerja</th>
+                    <th>Satuan</th>
                 </tr>
             </thead>
             <tbody id="tbody"></tbody>
@@ -359,19 +359,19 @@ window.handleData = function(res) {
         let uniqueAreas = new Set();
 
         rows.forEach(r => {
-            // Pemetaan Kolom Spreadsheet Sesuai Gambar 2:
-            // A (0): Tanggal | B (1): Nama Barang | C (2): Satuan
-            // D (3): Jenis   | E (4): Jumlah      | F (5): Keterangan
-            // G (6): Lokasi  | H (7): Kategori    | I (8): Area Kerja
+            // Pemetaan Kolom Spreadsheet Sesuai Gambar:
+            // A (0): Tanggal    | B (1): Nama Barang | C (2): Jenis
+            // D (3): Jumlah     | E (4): Keterangan  | F (5): Lokasi
+            // G (6): Kategori   | H (7): Area Kerja  | I (8): Satuan
             let tanggalRaw = r.c[0] ? (r.c[0].f || r.c[0].v || '') : '';
             let nama       = r.c[1] ? (r.c[1].v || '').toString().trim() : '';
-            let satuan     = r.c[2] ? (r.c[2].v || '').toString().trim() : '';
-            let jenis      = r.c[3] ? (r.c[3].v || '').toString().trim() : '';
-            let jumlah     = r.c[4] ? parseFloat(r.c[4].v || 0) : 0;
-            let ket        = r.c[5] ? (r.c[5].v || '').toString().trim() : '';
-            let lokasi     = r.c[6] ? (r.c[6].v || '').toString().trim() : '';
-            let kategori   = r.c[7] ? (r.c[7].v || '').toString().trim() : ''; 
-            let areaKerja  = r.c[8] ? (r.c[8].v || '').toString().trim() : ''; 
+            let jenis      = r.c[2] ? (r.c[2].v || '').toString().trim() : '';
+            let jumlah     = r.c[3] ? parseFloat(r.c[3].v || 0) : 0;
+            let ket        = r.c[4] ? (r.c[4].v || '').toString().trim() : '';
+            let lokasi     = r.c[5] ? (r.c[5].v || '').toString().trim() : '';
+            let kategori   = r.c[6] ? (r.c[6].v || '').toString().trim() : ''; 
+            let areaKerja  = r.c[7] ? (r.c[7].v || '').toString().trim() : ''; 
+            let satuan     = r.c[8] ? (r.c[8].v || '').toString().trim() : '';
 
             if(!nama && !tanggalRaw && !jenis) return;
 
@@ -548,18 +548,18 @@ function render(data){
             }
         }
 
-        // Susunan Baris Tabel Sesuai Urutan Gambar 2
+        // Susunan Baris Tabel Sesuai Urutan Gambar Google Sheet
         tbodyHtml.push(`
         <tr>
             <td>${r.tanggal}</td>
             <td style="font-weight: 500;">${barang}</td>
-            <td>${r.satuan || '-'}</td>
             <td><span class="badge ${jenis==='masuk'?'in':'out'}">${r.jenis || '-'}</span></td>
             <td class="text-right" style="font-weight: 600;">${r.jumlah}</td>
             <td>${r.ket || '-'}</td>
             <td>${r.lokasi || '-'}</td>
             <td>${r.kategori || '-'}</td>
             <td>${r.areaKerja || '-'}</td>
+            <td>${r.satuan || '-'}</td>
         </tr>`);
     });
 
@@ -787,20 +787,20 @@ function showAllBarang(){
 
 function downloadCSV(){
     let rows = [...document.querySelectorAll('#tbody tr')];
-    let csv = 'Tanggal,Nama Barang,Satuan,Jenis,Jumlah,Keterangan,Lokasi,Kategori,Area Kerja\n'; 
+    let csv = 'Tanggal,Nama Barang,Jenis,Jumlah,Keterangan,Lokasi,Kategori,Area Kerja,Satuan\n'; 
     rows.forEach(r => {
         let c = r.querySelectorAll('td');
         if(c.length){
             let tgl    = c[0] ? c[0].innerText : '';
             let brg    = c[1] ? c[1].innerText : '';
-            let stn    = c[2] ? c[2].innerText : '';
-            let jns    = c[3] ? c[3].innerText : '';
-            let jml    = c[4] ? c[4].innerText : '';
-            let ket    = c[5] ? c[5].innerText : '';
-            let lok    = c[6] ? c[6].innerText : '';
-            let kat    = c[7] ? c[7].innerText : '';
-            let area   = c[8] ? c[8].innerText : ''; 
-            csv += `"${tgl}","${brg}","${stn}","${jns}","${jml}","${ket}","${lok}","${kat}","${area}"\n`;
+            let jns    = c[2] ? c[2].innerText : '';
+            let jml    = c[3] ? c[3].innerText : '';
+            let ket    = c[4] ? c[4].innerText : '';
+            let lok    = c[5] ? c[5].innerText : '';
+            let kat    = c[6] ? c[6].innerText : '';
+            let area   = c[7] ? c[7].innerText : ''; 
+            let stn    = c[8] ? c[8].innerText : '';
+            csv += `"${tgl}","${brg}","${jns}","${jml}","${ket}","${lok}","${kat}","${area}","${stn}"\n`;
         }
     });
     let blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
